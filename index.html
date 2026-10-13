@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1219">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Room 155 Viewfinder</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+/* Layout: full-bleed viewfinder stage, lens + action bars beneath, setup panel docked right (drawer on phones) */
+:root{
+  --bg:#070b10; --surface:#0d151d; --surface-2:#121c26; --line:#1f2c39; --line-2:#2a3a4a;
+  --fg:#e8eef4; --muted:#8a9aab; --dim:#5d6d7e;
+  --accent:#1ea7dc; --accent-ink:#bfeaff; --accent-fill:#0f3d55; --warn:#f2b441;
+  --ui: "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --wide: "Segoe UI Variable Display","Segoe UI",system-ui,Roboto,Arial,sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:14px/1.35 var(--ui);overscroll-behavior:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.app{height:100%;display:grid;grid-template-rows:auto 1fr;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
+
+/* header */
+.top{display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--bg);min-width:0}
+.brand{display:flex;align-items:center;gap:16px;min-width:0;flex:1}
+.wordmark{font:500 22px/1 var(--wide);letter-spacing:.32em;white-space:nowrap}
+.brand .sub{font-size:11px;letter-spacing:.34em;color:var(--muted);padding-left:16px;border-left:1px solid var(--line-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:8px 16px;white-space:nowrap;color:var(--fg)}
+.seg button+button{border-left:1px solid var(--line-2)}
+.seg button[aria-pressed="true"]{background:var(--accent-fill);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.tools{display:flex;gap:8px;align-items:center}
+.chip{border:1px solid var(--line-2);background:var(--surface);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.chip[aria-pressed="true"]{color:var(--accent-ink);border-color:var(--accent);background:var(--accent-fill)}
+.iconbtn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--fg)}
+.iconbtn svg,.act svg,.chip svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* body */
+.body{display:flex;min-height:0;min-width:0}
+.main{flex:1;min-width:0;display:grid;grid-template-rows:1fr auto}
+.stage{position:relative;overflow:hidden;background:#000;min-height:0;touch-action:none}
+#gl,#ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{pointer-events:none}
+#refImg{position:absolute;object-fit:cover;pointer-events:none}
+.info{position:absolute;left:16px;top:10px;display:flex;gap:12px;align-items:center;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;max-width:calc(100% - 32px);white-space:nowrap;overflow:hidden}
+.info .eyebrow{letter-spacing:.3em;font-size:11px;color:#cfd8e2;padding-right:12px;border-right:1px solid #ffffff55}
+.info #infoText{font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+.warn{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#1d1405e6;border:1px solid var(--warn);color:#ffd88a;padding:6px 12px;border-radius:6px;font-size:12px;max-width:calc(100% - 32px);text-align:center}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
+.flash.on{opacity:.7;transition:none}
+.gate{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,#0f1b26 0%,#05080b 75%);padding:16px;text-align:center}
+.gate-inner{display:grid;gap:14px;justify-items:center;max-width:440px}
+.gate h1{font:500 26px/1.1 var(--wide);letter-spacing:.32em;margin:0}
+.gate p{margin:0;color:var(--muted)}
+.gate .err{color:#ffb4a8}
+.rotate{position:absolute;right:12px;bottom:12px;font-size:12px;color:var(--muted);background:#000a;padding:4px 8px;border-radius:4px}
+
+/* controls */
+.controls{background:var(--surface);border-top:1px solid var(--line);min-width:0}
+.lensbar{display:flex;align-items:center;gap:16px;padding:10px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.lensbar .lbl{width:100%;font-size:13px;color:var(--muted);margin-bottom:-4px}
+.focals{display:flex;gap:8px}
+.focals button{min-width:64px;height:44px;border:1px solid var(--line-2);border-radius:6px;background:var(--surface-2);font-size:18px;font-variant-numeric:tabular-nums}
+.focals button[aria-pressed="true"]{background:var(--accent-fill);border-color:var(--accent);color:var(--accent-ink)}
+.vsep{width:1px;height:32px;background:var(--line-2)}
+.lensname{color:var(--muted);white-space:nowrap}
+.lensname b{color:var(--fg);font-weight:500}
+.stepper{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.stepper .box{display:flex;align-items:center;border:1px solid var(--line-2);border-radius:6px;background:var(--surface-2)}
+.stepper input{width:64px;border:0;background:transparent;padding:8px 10px;font-size:18px;font-variant-numeric:tabular-nums}
+.stepper .arrows{display:grid}
+.stepper .arrows button{border:0;background:transparent;width:28px;height:20px;color:var(--muted);font-size:11px}
+.actions{display:flex;gap:10px;padding:10px 16px;align-items:center}
+.act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:96px;height:58px;padding:6px 14px;border:1px solid var(--line-2);border-radius:6px;background:var(--surface-2);font-size:13px;white-space:nowrap}
+.act[aria-pressed="true"]{background:var(--accent-fill);border-color:var(--accent);color:var(--accent-ink)}
+.act svg{width:22px;height:22px}
+.act.primary{border-color:var(--accent)}
+.hint{margin-left:auto;font-size:12px;color:var(--muted);max-width:240px}
+
+/* panel */
+.panel{width:380px;flex:none;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.panel-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.panel-head h2{margin:0;font:500 18px/1 var(--wide);letter-spacing:.2em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel-scroll{overflow-y:auto;padding:4px 16px 16px;min-height:0;flex:1}
+.view{display:grid;gap:2px}
+.panel h3{font:500 16px/1.2 var(--ui);margin:14px 0 6px;letter-spacing:.01em}
+.panel h3 small{font-size:12px;color:var(--muted);font-weight:400}
+.row{display:flex;align-items:center;gap:10px;min-height:42px;justify-content:space-between}
+.row > label,.row > .k{color:#cfd8e2;font-size:13px}
+.row + .row{border-top:1px solid #ffffff08}
+.field{background:var(--surface-2);border:1px solid var(--line-2);border-radius:6px;padding:8px 10px;min-width:0}
+select.field{flex:1;max-width:220px}
+input.field{width:100%}
+.num{font-variant-numeric:tabular-nums}
+.seg.full{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+.seg.full button{padding:8px 4px}
+.switch{position:relative;width:44px;height:26px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.switch span{position:absolute;inset:0;border-radius:13px;background:var(--line-2);transition:background .15s}
+.switch span::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch input:checked + span{background:var(--accent)}
+.switch input:checked + span::after{transform:translateX(18px)}
+.switch input:focus-visible + span{outline:2px solid var(--accent-ink);outline-offset:2px}
+.slider{display:grid;grid-template-columns:1fr 76px;gap:10px;align-items:center}
+.slider .val{text-align:center}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.temp input[type=range]{accent-color:#e0e6ec}
+.scale{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:-4px;padding-right:86px}
+.btn{border:1px solid var(--line-2);background:var(--surface-2);border-radius:6px;padding:9px 12px;display:inline-flex;gap:8px;align-items:center;justify-content:center}
+.btn.wide{width:100%;justify-content:space-between}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#03121b;font-weight:600}
+.btn.danger{border-color:#7a2e2e;color:#ffb4a8}
+.btn:disabled{opacity:.45}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:12px;color:var(--muted);margin:4px 0}
+.stat{font-variant-numeric:tabular-nums;color:var(--accent-ink)}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.presets .btn{font-size:12px;padding:8px}
+textarea.field{width:100%;min-height:160px;resize:vertical}
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gallery button{border:1px solid var(--line-2);background:#000;border-radius:6px;padding:0;overflow:hidden;text-align:left}
+.gallery img{display:block;width:100%;aspect-ratio:2.39;object-fit:cover}
+.gallery span{display:block;padding:4px 6px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{padding:24px 8px;color:var(--muted);text-align:center}
+.pcopts{display:grid;gap:8px}
+.pcopts .btn{justify-content:flex-start;text-align:left}
+.pcopts .btn small{display:block;color:var(--muted);font-size:12px}
+
+dialog{border:1px solid var(--line-2);background:var(--surface);color:var(--fg);border-radius:10px;padding:0;max-width:min(920px,96vw);width:100%;max-height:94vh}
+dialog::backdrop{background:#000c}
+.dlg{display:grid;grid-template-rows:auto 1fr auto;max-height:94vh}
+.dlg-body{overflow:auto;padding:12px 16px;display:grid;gap:10px}
+.dlg-body img{width:100%;border-radius:4px;background:#000}
+.dlg-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;top:calc(56px + env(safe-area-inset-top,0px));transform:translate(-50%,-10px);background:#0f3d55;border:1px solid var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:6px;opacity:0;transition:.25s;pointer-events:none;z-index:50;font-size:13px;max-width:90vw}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* drawer mode: phones and narrow windows */
+@media (max-width:1099px), (max-height:600px){
+  .panel{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:20;transform:translateX(105%);transition:transform .22s ease;box-shadow:-12px 0 40px #000a;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) 0}
+  .app.panel-open .panel{transform:none}
+  .brand .sub{display:none}
+}
+@media (min-width:1100px) and (min-height:601px){
+  .app.panel-closed .panel{display:none}
+}
+/* compact landscape phone (Galaxy S25 ≈ 780×360) */
+@media (max-height:520px){
+  .top{padding:4px 12px;gap:10px}
+  .wordmark{font-size:15px}
+  .seg button{padding:5px 10px;font-size:12px}
+  .iconbtn{width:32px;height:32px}
+  .controls{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none}
+  .controls::-webkit-scrollbar{display:none}
+  .lensbar{border:0;flex-wrap:nowrap;padding:6px 8px 6px 12px;gap:8px}
+  .lensbar .lbl,.lensname,.lensbar .vsep,.hint,.stepper > span{display:none}
+  .focals{gap:4px}
+  .focals button{min-width:44px;height:38px;font-size:15px}
+  .stepper input{width:52px;padding:6px 8px;font-size:15px}
+  .actions{padding:6px 12px 6px 4px;gap:4px}
+  .act{min-width:44px;height:40px;padding:4px 8px;font-size:0;gap:0}
+  .act svg{width:20px;height:20px}
+  .info{top:6px;left:10px;font-size:11px}
+  .info .eyebrow{display:none}
+}
+@media (max-width:640px) and (min-height:521px){
+  .top{gap:8px;padding:8px 12px}
+  .seg.cams button{padding:6px 8px;font-size:12px}
+  .wordmark{font-size:14px;letter-spacing:.22em}
+  #pcBtn{font-size:0;gap:0;padding:6px}
+  .iconbtn{width:32px;height:32px}
+  .vsep{display:none}
+  .focals button{min-width:48px}
+  .actions{overflow-x:auto}
+  .act{min-width:72px;font-size:11px}
+  .hint{display:none}
+  .lensname{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app panel-closed" id="app">
+  <header class="top">
+    <div class="brand"><span class="wordmark">ROOM 155</span><span class="sub">DIRECTOR'S VIEWFINDER</span></div>
+    <div class="seg cams" id="camSeg">
+      <button data-cam="R5" aria-pressed="true">Canon R5</button>
+      <button data-cam="C80" aria-pressed="false">Canon C80</button>
+    </div>
+    <div class="tools">
+      <button class="chip" id="pcBtn" title="Test on a Windows computer with a webcam, test scene or photo" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>PC test</button>
+      <button class="iconbtn" id="fsBtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="iconbtn" id="panelBtn" title="Setup panel" aria-label="Setup panel"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/></svg></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <main class="main">
+      <div class="stage" id="stage">
+        <canvas id="gl"></canvas>
+        <img id="refImg" alt="" hidden>
+        <svg id="ov" aria-hidden="true"></svg>
+        <div class="info"><span class="eyebrow">FRAMING PREVIEW</span><span id="infoText"></span></div>
+        <div class="warn" id="warn" hidden></div>
+        <div class="rotate" id="rotateHint" hidden>Rotate phone to landscape</div>
+        <div class="flash" id="flash"></div>
+        <div class="gate" id="gate">
+          <div class="gate-inner">
+            <h1>ROOM 155</h1>
+            <p>Director's viewfinder. Uses the phone's rear camera to show the frame of a Canon R5 or C80 at any focal length.</p>
+            <button class="btn primary" id="startBtn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Start viewfinder</button>
+            <button class="chip" id="gatePcBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>Testing on a PC? Use webcam or test scene</button>
+            <p class="err" id="gateErr" hidden></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="lensbar">
+          <div class="lbl">Lens focal length (mm)</div>
+          <div class="focals" id="focals"></div>
+          <div class="vsep"></div>
+          <div class="lensname">Lens: <b id="lensName">24–105 mm f/4</b></div>
+          <div class="vsep"></div>
+          <div class="stepper">
+            <span>Focal length</span>
+            <div class="box">
+              <input id="focalIn" class="num" type="number" inputmode="numeric" min="8" max="800" step="1" value="50" aria-label="Focal length in millimetres">
+              <div class="arrows"><button id="fUp" aria-label="Increase focal length">▲</button><button id="fDn" aria-label="Decrease focal length">▼</button></div>
+            </div>
+            <span>mm</span>
+          </div>
+        </div>
+        <nav class="actions">
+          <button class="act" id="guidesBtn" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M3 8h18M3 16h18"/></svg>Guides</button>
+          <button class="act" id="refBtn" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 7V5h2M19 5h2v2M21 17v2h-2M5 19H3v-2M9 5h2M13 5h2M9 19h2M13 19h2M3 10v4M21 10v4"/></svg>Reference overlay</button>
+          <button class="act primary" id="capBtn"><svg viewBox="0 0 24 24"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Capture frame</button>
+          <button class="act" id="notesBtn"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Shot notes</button>
+          <button class="act" id="savedBtn"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h12a2 2 0 0 1 2 2v10"/></svg>Saved frames</button>
+          <div class="hint" id="hint">Phone preview • framing approximate until calibrated.</div>
+        </nav>
+      </div>
+    </main>
+
+    <aside class="panel" id="panel" aria-label="Viewfinder panel">
+      <div class="panel-head">
+        <button class="iconbtn" id="backBtn" aria-label="Back to setup" hidden><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <h2 id="panelTitle">ROOM 155</h2>
+        <button class="chip" id="hidePanel"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16M17 10l2 2-2 2"/></svg>Hide panel</button>
+      </div>
+      <div class="panel-scroll">
+
+        <!-- SETUP -->
+        <section class="view" data-view="setup">
+          <h3>Viewfinder setup</h3>
+          <div class="row"><label for="modeSel">Recording mode</label><select id="modeSel" class="field"></select></div>
+          <div class="two" id="customSensor" hidden>
+            <label class="note">Sensor width (mm)<input id="cW" class="field num" type="number" step="0.1" min="4" max="60"></label>
+            <label class="note">Sensor height (mm)<input id="cH" class="field num" type="number" step="0.1" min="2" max="40"></label>
+          </div>
+          <div class="row"><label for="lensSel">Lens set</label><select id="lensSel" class="field"></select></div>
+          <div class="row"><span class="k">Focal length</span><span class="stat" id="focalStat">50 mm</span></div>
+          <div class="row"><span class="k">Horizontal angle of view</span><span class="stat" id="hfovStat">–</span></div>
+          <div class="k" style="font-size:13px;color:#cfd8e2;margin-top:6px">Frame ratio</div>
+          <div class="seg full" id="ratioSeg">
+            <button data-r="1.7778">16:9</button><button data-r="1.85">1.85:1</button><button data-r="2.39">2.39:1</button><button data-r="custom">Custom</button>
+          </div>
+          <div class="row" id="customRatioRow" hidden><label for="customRatio">Custom ratio (e.g. 2.0, 4:3, 1.33)</label><input id="customRatio" class="field num" style="max-width:96px" value="2.00"></div>
+
+          <h3>Guides</h3>
+          <div class="row"><label for="gThirds">Thirds</label><span class="switch"><input type="checkbox" id="gThirds"><span></span></span></div>
+          <div class="row"><label for="gCross">Centre cross</label><span class="switch"><input type="checkbox" id="gCross"><span></span></span></div>
+          <div class="row"><label for="gSafe">Safe areas <small class="note">(93% action / 90% title)</small></label><span class="switch"><input type="checkbox" id="gSafe"><span></span></span></div>
+          <div class="k" style="font-size:13px;color:#cfd8e2;margin-top:6px">Frame mask opacity</div>
+          <div class="slider"><input type="range" id="maskR" min="0" max="100" step="1" aria-label="Frame mask opacity"><span class="field val num" id="maskV">50%</span></div>
+
+          <h3>Grading <small>(preview adjustments only)</small></h3>
+          <div class="k" style="font-size:13px;color:#cfd8e2">Colour temperature</div>
+          <div class="slider temp"><input type="range" id="tempR" min="2500" max="10000" step="50" aria-label="Colour temperature" style="background:linear-gradient(90deg,#4cc3ff,#9de2c8,#ffe08a,#ff8a2a);height:4px;border-radius:2px;appearance:none;-webkit-appearance:none"><span class="field val num" id="tempV">5600 K</span></div>
+          <div class="scale"><span>Cool</span><span>Warm</span></div>
+          <div class="k" style="font-size:13px;color:#cfd8e2;margin-top:6px">Exposure</div>
+          <div class="slider"><input type="range" id="evR" min="-3" max="3" step="0.1" aria-label="Exposure"><span class="field val num" id="evV">+0.0 EV</span></div>
+          <div class="scale"><span>−3</span><span>+3</span></div>
+          <div class="row"><button class="btn" id="resetGrade">↺ Reset grading</button><span class="note">Preview adjustments only</span></div>
+
+          <h3>Phone lens</h3>
+          <button class="btn wide" id="calibBtn"><span>Calibrate field of view</span><span class="stat" id="calibStat">–</span></button>
+          <div class="row"><label for="hwZoom">Use phone zoom for sharper long lenses</label><span class="switch"><input type="checkbox" id="hwZoom"><span></span></span></div>
+
+          <h3>Reference overlay</h3>
+          <div class="two"><button class="btn" id="refLoad">Load image…</button><button class="btn" id="refClear">Clear</button></div>
+          <div class="slider" style="margin-top:8px"><input type="range" id="refR" min="5" max="100" step="1" aria-label="Reference opacity"><span class="field val num" id="refV">50%</span></div>
+          <input type="file" id="refFile" accept="image/*" hidden>
+
+          <h3>Shot reference</h3>
+          <div class="two">
+            <input class="field" id="sceneIn" aria-label="Scene" placeholder="Scene">
+            <input class="field" id="shotIn" aria-label="Shot" placeholder="Shot">
+          </div>
+          <div class="row"><label for="burn">Burn slate into captures</label><span class="switch"><input type="checkbox" id="burn"><span></span></span></div>
+          <button class="btn primary" id="saveNotesBtn" style="width:100%;margin-top:6px">Save frame + notes</button>
+          <p class="note">Select mode to match camera crop. Save frame + notes stores the frame, then moves to the next shot letter.</p>
+        </section>
+
+        <!-- CALIBRATE -->
+        <section class="view" data-view="calib" hidden>
+          <p class="note">While this panel is open the full, unzoomed phone image is shown with edge markers.</p>
+          <div class="row" id="devRow"><label for="devSel">Camera</label><select id="devSel" class="field"></select></div>
+          <div class="row"><span class="k">Current horizontal FOV</span><span class="stat" id="calCur">–</span></div>
+          <h3>Lens presets</h3>
+          <div class="presets" id="presets"></div>
+          <h3>Measure it <small>(most accurate)</small></h3>
+          <p class="note">Stand square to a wall. Mark where the left and right edge markers fall, then measure the distance between the marks and from the phone lens to the wall.</p>
+          <div class="two">
+            <label class="note">Distance to wall (m)<input id="mD" class="field num" type="number" step="0.01" min="0.2" value="2.00"></label>
+            <label class="note">Visible width (m)<input id="mW" class="field num" type="number" step="0.01" min="0.1" value="2.90"></label>
+          </div>
+          <button class="btn" id="mApply" style="margin-top:8px">Apply measurement</button>
+          <h3>Fine tune</h3>
+          <div class="row"><button class="btn" id="fMinus">−0.5°</button><input id="fovIn" class="field num" type="number" step="0.1" min="10" max="150" style="max-width:96px;text-align:center"><button class="btn" id="fPlus">+0.5°</button></div>
+          <p class="note">Calibration is stored on this device for each camera.</p>
+        </section>
+
+        <!-- NOTES -->
+        <section class="view" data-view="notes" hidden>
+          <div class="row"><span class="k">Scene <b id="nScene">03</b> · Shot <b id="nShot">B</b></span><button class="btn" id="nEdit">Edit</button></div>
+          <textarea class="field" id="notesIn" placeholder="Blocking, lens, movement, performance notes…"></textarea>
+          <button class="btn primary" id="nSave" style="width:100%">Save frame + notes</button>
+          <p class="note">Notes are attached to every capture until you clear them.</p>
+        </section>
+
+        <!-- SAVED -->
+        <section class="view" data-view="saved" hidden>
+          <div class="gallery" id="gallery"></div>
+        </section>
+
+        <!-- PC TEST -->
+        <section class="view" data-view="pc" hidden>
+          <p class="note">Windows PCs have no rear camera. Pick a source to test the viewfinder.</p>
+          <div class="pcopts">
+            <button class="btn" data-src="webcam"><span>Webcam<small>Uses the PC webcam. Calibrate for real framing.</small></span></button>
+            <button class="btn" data-src="test"><span>Test scene<small>Synthetic 72.5° view with angle markers. Frame edges land on the true angles.</small></span></button>
+            <button class="btn" data-src="photo"><span>Load a photo…<small>A still taken with the phone's main camera.</small></span></button>
+            <button class="btn" data-src="rear"><span>Phone mode<small>Back to the rear camera.</small></span></button>
+          </div>
+          <input type="file" id="photoFile" accept="image/*" hidden>
+        </section>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="frameDlg">
+  <div class="dlg">
+    <div class="panel-head"><h2 id="fdTitle">Frame</h2><button class="iconbtn" id="fdClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <img id="fdImg" alt="Captured frame">
+      <div class="meta" id="fdMeta"></div>
+      <textarea class="field" id="fdNotes" style="min-height:90px" aria-label="Notes"></textarea>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn primary" id="fdShare">Share</button>
+      <button class="btn" id="fdDown">Download</button>
+      <button class="btn" id="fdSaveNotes">Update notes</button>
+      <button class="btn danger" id="fdDel" style="margin-left:auto">Delete</button>
+    </div>
+  </div>
+</dialog>
+<div class="toast" id="toast"></div>
+<video id="vid" playsinline muted autoplay style="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none"></video>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const D2R = Math.PI/180;
+
+/* ---------- reference data ---------- */
+const CAMS = {
+  R5: { name:'Canon R5', modes:[
+    {id:'ff',   label:'Full-frame / full-width', short:'Full frame', w:36.0, h:19.0},
+    {id:'crop', label:'APS-C / Super 35 crop (1.6×)', short:'S35 crop 1.6×', w:22.5, h:11.9},
+    {id:'custom', label:'Custom sensor…', short:'Custom', w:36, h:19}]},
+  C80: { name:'Canon C80', modes:[
+    {id:'ff6k',  label:'Full frame 6K / DCI', short:'FF 6K', w:36.0, h:19.0},
+    {id:'ffuhd', label:'Full frame UHD / HD', short:'FF UHD', w:33.8, h:19.0},
+    {id:'s35dci',label:'Super 35 crop DCI (≈1.46×)', short:'S35 1.46×', w:24.7, h:13.0},
+    {id:'s35uhd',label:'Super 35 crop UHD (≈1.54×)', short:'S35 1.54×', w:23.4, h:13.2},
+    {id:'custom', label:'Custom sensor…', short:'Custom', w:36, h:19}]}
+};
+const LENSES = {
+  rf24105:{name:'24 – 105 mm f/4', f:[24,35,50,85,105]},
+  rf1535: {name:'15 – 35 mm f/2.8', f:[15,20,24,28,35]},
+  rf2470: {name:'24 – 70 mm f/2.8', f:[24,28,35,50,70]},
+  rf70200:{name:'70 – 200 mm f/2.8', f:[70,85,100,135,200]},
+  primes: {name:'Prime set', f:[18,25,35,50,75,100]},
+  cine:   {name:'Cine primes', f:[14,24,35,50,85,135]}
+};
+// Diagonal FOV specs refer to the 4:3 sensor; horizontal = atan(tan(d/2)*0.8)*2
+const diag43 = d => 2*Math.atan(Math.tan(d/2*D2R)*0.8)/D2R;
+const diag169 = d => 2*Math.atan(Math.tan(d/2*D2R)*16/Math.hypot(16,9))/D2R;
+const PRESETS = [
+  {name:'S25 main 1×', h:diag43(85)},
+  {name:'S25 ultrawide 0.6×', h:diag43(120)},
+  {name:'S25 telephoto 3×', h:diag43(36)},
+  {name:'Webcam 78° diag', h:diag169(78)},
+  {name:'Webcam 90° diag', h:diag169(90)},
+  {name:'Webcam 65° diag', h:diag169(65)}
+];
+const TEST_HFOV = diag43(85);
+
+/* ---------- state ---------- */
+const DEF = {cam:'R5', mode:{R5:'ff',C80:'ff6k'}, custom:{w:36,h:19}, focal:50, lens:'rf24105',
+  ratio:'2.39', customRatio:'2.00', guides:true, thirds:true, cross:true, safe:true, mask:50,
+  kelvin:5600, ev:0, scene:'03', shot:'B', notes:'', burn:true, hwZoom:true, refOpacity:50, refOn:false,
+  source:'rear', calib:{}};
+let S = structuredClone(DEF);
+try { const saved = JSON.parse(localStorage.getItem('room155') || 'null'); if (saved) S = Object.assign(S, saved); } catch(e) {}
+let saveT; const persist = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem('room155', JSON.stringify(S)); } catch(e){} }, 250); };
+
+/* ---------- source ---------- */
+const video = $('#vid');
+let src = null;          // {el, w, h, kind, mirror, key, dirty}
+let stream = null, track = null, zoomCap = null, hwZoomNow = 1, calibZoomRef = 1;
+let calibrating = false, devices = [];
+
+function stopStream(){ if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; track = null; zoomCap = null; hwZoomNow = 1; }
+
+async function startCamera(kind, deviceId){
+  stopStream();
+  const v = {width:{ideal:1920}, height:{ideal:1080}};
+  if (deviceId) v.deviceId = {exact:deviceId};
+  else if (kind === 'rear') v.facingMode = {ideal:'environment'};
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error(location.protocol === 'http:' ? 'Camera needs HTTPS. Open the app from its https:// address.' : 'This browser has no camera access.');
+  stream = await navigator.mediaDevices.getUserMedia({video:v, audio:false});
+  track = stream.getVideoTracks()[0];
+  video.srcObject = stream;
+  await video.play().catch(()=>{});
+  await new Promise(r => video.videoWidth ? r() : video.addEventListener('loadedmetadata', r, {once:true}));
+  const st = track.getSettings ? track.getSettings() : {};
+  try { const caps = track.getCapabilities ? track.getCapabilities() : {}; zoomCap = caps.zoom && caps.zoom.max > caps.zoom.min ? caps.zoom : null; } catch(e) { zoomCap = null; }
+  hwZoomNow = st.zoom || 1;
+  const facing = st.facingMode || '';
+  src = {el:video, kind:'video', mirror: facing === 'user', key:'cam:' + (st.deviceId || track.label || kind), label: track.label || kind,
+         facing, isRearGuess: kind === 'rear' || facing === 'environment' || /back|rear|environment/i.test(track.label || '')};
+  if (!S.calib[src.key]) S.calib[src.key] = src.isRearGuess ? {h:PRESETS[0].h, how:PRESETS[0].name, z:1} : {h:PRESETS[3].h, how:PRESETS[3].name, z:1};
+  try { devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch(e) { devices = []; }
+  S.source = kind; persist();
+  track.addEventListener('ended', () => toast('Camera stopped. Tap Start to resume.'));
+  scheduleZoom();
+  refreshAll();
+}
+
+/* synthetic test scene, drawn for a known 72.5° lens so framing can be verified */
+const testCanvas = document.createElement('canvas');
+function drawTestScene(t){
+  const W = 1920, H = 1080; testCanvas.width = W; testCanvas.height = H;
+  const c = testCanvas.getContext('2d');
+  const g = c.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3d4f63'); g.addColorStop(.55,'#8c7a62'); g.addColorStop(.56,'#3a2f26'); g.addColorStop(1,'#1c1612');
+  c.fillStyle = g; c.fillRect(0,0,W,H);
+  const tanH = Math.tan(TEST_HFOV/2*D2R), xAt = a => W/2 + Math.tan(a*D2R)/tanH*W/2;
+  // windows / set pieces
+  for (let i=-3;i<=3;i++){ const x = xAt(i*11)-60; c.fillStyle = i%2 ? '#e8c98d33' : '#9fc4e033'; c.fillRect(x, 140, 120, 360); }
+  // two figures at a table
+  const fig = (x, col) => { c.fillStyle = col; c.beginPath(); c.arc(x, 430, 62, 0, 7); c.fill(); c.beginPath(); c.moveTo(x-150, 1080); c.quadraticCurveTo(x-140, 560, x, 560); c.quadraticCurveTo(x+140,560,x+150,1080); c.fill(); };
+  fig(xAt(-12), '#1e2229'); fig(xAt(12), '#2a2024');
+  c.fillStyle = '#5b4636'; c.fillRect(xAt(-24), 760, xAt(24)-xAt(-24), 40);
+  // angle scale
+  c.font = '600 26px system-ui,sans-serif'; c.textAlign = 'center';
+  for (let a=-35; a<=35; a+=1){ const x = xAt(a); const major = a % 10 === 0, mid = a % 5 === 0;
+    c.strokeStyle = major ? '#ffffff' : mid ? '#ffffffbb' : '#ffffff55'; c.lineWidth = major ? 3 : 1.5;
+    const y0 = 640; c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y0 + (major ? 70 : mid ? 50 : 26)); c.stroke();
+    if (major || mid) { c.fillStyle = '#fff'; c.fillText(a + '°', x, y0 + 100); } }
+  c.strokeStyle = '#ffffff88'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, 640); c.lineTo(W, 640); c.stroke();
+  c.fillStyle = '#ffffffcc'; c.font = '500 22px system-ui,sans-serif';
+  c.fillText('ROOM 155 TEST SCENE · simulated ' + TEST_HFOV.toFixed(1) + '° lens · frame edges should land on ±' + (targetHfov()/2).toFixed(1) + '°', W/2, 610);
+  // moving marker so the stream visibly runs
+  const mx = xAt(Math.sin(t/1200)*30); c.fillStyle = '#1ea7dc'; c.beginPath(); c.arc(mx, 600, 12, 0, 7); c.fill();
+}
+function startTest(){ stopStream(); drawTestScene(0); src = {el:testCanvas, kind:'test', mirror:false, key:'test', label:'Test scene'}; S.calib.test = {h:TEST_HFOV, how:'Test scene (fixed)', z:1}; S.source = 'test'; persist(); refreshAll(); }
+function startPhoto(file){
+  const img = new Image(); img.onload = () => { stopStream(); src = {el:img, kind:'photo', mirror:false, key:'photo', label:'Photo', dirty:true};
+    if (!S.calib.photo) S.calib.photo = {h:PRESETS[0].h, how:PRESETS[0].name, z:1}; S.source = 'photo'; persist(); hideGate(); refreshAll(); };
+  img.src = URL.createObjectURL(file);
+}
+const srcW = () => src ? (src.el.videoWidth || src.el.naturalWidth || src.el.width) : 16;
+const srcH = () => src ? (src.el.videoHeight || src.el.naturalHeight || src.el.height) : 9;
+
+/* ---------- optics ---------- */
+const modeObj = () => { const m = CAMS[S.cam].modes.find(x => x.id === S.mode[S.cam]) || CAMS[S.cam].modes[0]; return m.id === 'custom' ? {...m, w:+S.custom.w || 36, h:+S.custom.h || 19} : m; };
+function ratioVal(){
+  if (S.ratio !== 'custom') return +S.ratio;
+  const s = String(S.customRatio).trim(); const m = s.match(/^(\d+(?:\.\d+)?)\s*[:x\/]\s*(\d+(?:\.\d+)?)$/);
+  const v = m ? +m[1] / +m[2] : parseFloat(s); return v > 0.3 && v < 5 ? v : 2;
+}
+const activeWidth = () => { const m = modeObj(); return Math.min(m.w, m.h * ratioVal()); };
+const targetHfov = () => 2*Math.atan(activeWidth()/(2*S.focal))/D2R;
+const calib = () => (src && S.calib[src.key]) || {h:PRESETS[0].h, z:1};
+// tan of half the horizontal FOV of the image currently delivered by the source
+function srcTanHalf(){ const c = calib(); const z = (src && src.kind === 'video') ? hwZoomNow / (c.z || 1) : 1; return Math.tan(c.h/2*D2R) / z; }
+
+/* hardware zoom: zoom optically/sensor-side toward the target, keep ~20% look-around */
+let zoomT;
+function scheduleZoom(){ clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 120); }
+async function applyZoom(){
+  if (!track || !zoomCap || !track.applyConstraints) return;
+  const c = calib(); const base = c.z || 1;
+  let want;
+  if (calibrating) want = Math.max(zoomCap.min, Math.min(zoomCap.max, base));
+  else if (!S.hwZoom) want = Math.max(zoomCap.min, Math.min(zoomCap.max, base));
+  else { const need = Math.tan(c.h/2*D2R) / Math.tan(targetHfov()/2*D2R) * base; const lo = zoomCap.min, hi = Math.min(zoomCap.max, 10);
+    want = need >= base ? Math.max(Math.min(base, hi), Math.min(hi, need * 0.8)) : Math.max(lo, Math.min(base, need)); }
+  if (zoomCap.step) want = Math.round(want / zoomCap.step) * zoomCap.step;
+  if (Math.abs(want - hwZoomNow) < 0.01) return;
+  try { await track.applyConstraints({advanced:[{zoom:want}]}); const s = track.getSettings(); hwZoomNow = s.zoom || want; } catch(e) {}
+}
+
+/* ---------- WebGL renderer ---------- */
+const cv = $('#gl'); const gl = cv.getContext('webgl', {preserveDrawingBuffer:false, antialias:false});
+let prog, tex, U = {};
+function initGL(){
+  if (!gl) return;
+  const vs = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const fs = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+  uniform sampler2D t;uniform vec2 res;uniform vec4 vr;uniform vec4 fr;uniform float mask;uniform vec3 gain;uniform float expo;uniform float mirror;uniform float has;
+  void main(){
+    vec2 px=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
+    vec2 uv=(px-vr.xy)/vr.zw; vec3 c;
+    if(has<0.5||uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.){ float s=step(.5,fract((px.x+px.y)/22.)); c=vec3(.035+.025*s,.04+.03*s,.05+.035*s); }
+    else{ if(mirror>.5)uv.x=1.-uv.x; c=texture2D(t,uv).rgb; c=pow(c,vec3(2.2))*gain*expo; c=pow(clamp(c,0.,1.),vec3(1./2.2)); }
+    bool inF=px.x>=fr.x&&px.x<=fr.x+fr.z&&px.y>=fr.y&&px.y<=fr.y+fr.w;
+    if(!inF)c*=(1.-mask);
+    gl_FragColor=vec4(c,1.);
+  }`;
+  const sh = (type, s) => { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+  prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  ['res','vr','fr','mask','gain','expo','mirror','has'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(p => gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+}
+initGL();
+
+/* colour temperature → linear RGB gains (preview of a camera WB setting vs 5600 K) */
+function k2rgb(k){ const t = k/100; let r, g, b;
+  if (t <= 66){ r = 255; g = 99.4708025861*Math.log(t) - 161.1195681661; b = t <= 19 ? 0 : 138.5177312231*Math.log(t-10) - 305.0447927307; }
+  else { r = 329.698727446*Math.pow(t-60,-0.1332047592); g = 288.1221695283*Math.pow(t-60,-0.0755148492); b = 255; }
+  return [r,g,b].map(v => Math.pow(Math.min(255, Math.max(1, v))/255, 2.2)); }
+function gains(){ const ref = k2rgb(5600), k = k2rgb(S.kelvin); const g = ref.map((v,i) => v / k[i]); const l = .2126*g[0] + .7152*g[1] + .0722*g[2]; return g.map(v => v / l); }
+
+/* ---------- geometry ---------- */
+let G = {W:0,H:0,dpr:1, fr:{x:0,y:0,w:0,h:0}, vr:{x:0,y:0,w:0,h:0}};
+function layout(){
+  const r = cv.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.round(r.width*dpr), H = Math.round(r.height*dpr);
+  if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
+  const compact = r.height < 330;
+  const m = Math.max(10, Math.min(r.width, r.height) * (compact ? .035 : .06));
+  const top = compact ? 20 : 38;
+  const availW = r.width - 2*m, availH = r.height - top - m;
+  const ratio = ratioVal(); let fw = availW, fh = fw / ratio; if (fh > availH){ fh = availH; fw = fh*ratio; }
+  const fr = {x:(r.width - fw)/2, y: top + (availH - fh)/2, w:fw, h:fh};
+  let vr;
+  const aspect = srcW()/srcH();
+  if (calibrating){ let w = r.width, h = w/aspect; if (h > r.height){ h = r.height; w = h*aspect; } vr = {x:(r.width-w)/2, y:(r.height-h)/2, w, h}; }
+  else { const w = fw * srcTanHalf() / Math.tan(targetHfov()/2*D2R); const h = w / aspect; vr = {x: fr.x + fw/2 - w/2, y: fr.y + fh/2 - h/2, w, h}; }
+  G = {W, H, dpr, cw:r.width, ch:r.height, fr, vr};
+}
+
+function render(){
+  layout();
+  if (gl && prog){
+    gl.viewport(0,0,G.W,G.H);
+    let has = 0;
+    if (src){
+      const el = src.el;
+      if (src.kind === 'video' && el.readyState >= 2){ gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, el); has = 1; }
+      else if (src.kind === 'test'){ drawTestScene(performance.now()); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, el); has = 1; }
+      else if (src.kind === 'photo'){ if (src.dirty){ gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, el); src.dirty = false; } has = 1; }
+    }
+    const d = G.dpr, gn = gains();
+    gl.uniform2f(U.res, G.W, G.H);
+    gl.uniform4f(U.vr, G.vr.x*d, G.vr.y*d, G.vr.w*d, G.vr.h*d);
+    gl.uniform4f(U.fr, G.fr.x*d, G.fr.y*d, G.fr.w*d, G.fr.h*d);
+    gl.uniform1f(U.mask, calibrating ? 0 : S.mask/100);
+    gl.uniform3f(U.gain, gn[0], gn[1], gn[2]);
+    gl.uniform1f(U.expo, Math.pow(2, S.ev));
+    gl.uniform1f(U.mirror, src && src.mirror ? 1 : 0);
+    gl.uniform1f(U.has, has);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  drawOverlay();
+  requestAnimationFrame(render);
+}
+
+/* ---------- overlay ---------- */
+const ov = $('#ov'), refImg = $('#refImg');
+let ovKey = '';
+function drawOverlay(){
+  const {fr, vr, cw, ch} = G;
+  const key = [cw,ch,fr.x,fr.y,fr.w,fr.h,vr.w,S.guides,S.thirds,S.cross,S.safe,calibrating,S.refOn,S.refOpacity].map(v => typeof v === 'number' ? v.toFixed(1) : v).join('|');
+  if (key === ovKey) return; ovKey = key;
+  ov.setAttribute('viewBox', `0 0 ${cw} ${ch}`);
+  let s = '';
+  if (calibrating){
+    const y1 = vr.y, y2 = vr.y + vr.h;
+    s += `<rect x="${vr.x+1}" y="${y1+1}" width="${vr.w-2}" height="${vr.h-2}" fill="none" stroke="#f2b441" stroke-width="2"/>`;
+    [vr.x+2, vr.x+vr.w-2].forEach((x,i) => { s += `<path d="M${x} ${y1} V${y2}" stroke="#f2b441" stroke-width="4"/><path d="M${x + (i?-18:18)} ${(y1+y2)/2} L${x} ${(y1+y2)/2 - 12} M${x + (i?-18:18)} ${(y1+y2)/2} L${x} ${(y1+y2)/2 + 12}" stroke="#f2b441" stroke-width="3" fill="none"/>`; });
+    s += `<text x="${cw/2}" y="${y2 - 14}" fill="#ffd88a" font-size="13" text-anchor="middle" font-family="system-ui">Measure between the yellow edges</text>`;
+    s += `<path d="M${cw/2-14} ${ch/2}H${cw/2+14}M${cw/2} ${ch/2-14}V${ch/2+14}" stroke="#fff" stroke-width="1.5"/>`;
+  } else {
+    s += `<rect x="${fr.x}" y="${fr.y}" width="${fr.w}" height="${fr.h}" fill="none" stroke="#fff" stroke-width="2"/>`;
+    if (S.guides){
+      const dash = 'stroke="#ffffffb0" stroke-width="1" stroke-dasharray="4 4" fill="none"';
+      if (S.thirds) for (let i=1;i<3;i++){ const x = fr.x + fr.w*i/3, y = fr.y + fr.h*i/3; s += `<path d="M${x} ${fr.y}V${fr.y+fr.h}M${fr.x} ${y}H${fr.x+fr.w}" ${dash}/>`; }
+      if (S.safe){ [[.93,'#ffffff66','ACTION'],[.90,'#1ea7dcaa','TITLE']].forEach(([k,c,l]) => { const w = fr.w*k, h = fr.h*k, x = fr.x + (fr.w-w)/2, y = fr.y + (fr.h-h)/2;
+        s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${c}" stroke-width="1"/>`; if (fr.w > 360) s += l === 'ACTION' ? `<text x="${x+w-4}" y="${y-3}" fill="${c}" font-size="9" letter-spacing="1.5" text-anchor="end" font-family="system-ui">${l}</text>` : `<text x="${x+4}" y="${y+h-4}" fill="${c}" font-size="9" letter-spacing="1.5" font-family="system-ui">${l}</text>`; }); }
+      if (S.cross){ const cx = fr.x + fr.w/2, cy = fr.y + fr.h/2, a = Math.max(12, Math.min(30, fr.h*.07)); s += `<path d="M${cx-a} ${cy}H${cx+a}M${cx} ${cy-a}V${cy+a}" stroke="#fff" stroke-width="1.5"/>`; }
+    }
+  }
+  ov.innerHTML = s;
+  if (S.refOn && refImg.src && !calibrating){ Object.assign(refImg.style, {left:fr.x+'px', top:fr.y+'px', width:fr.w+'px', height:fr.h+'px', opacity:S.refOpacity/100}); refImg.hidden = false; }
+  else refImg.hidden = true;
+}
+
+/* ---------- UI refresh ---------- */
+function fmtEV(v){ return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' EV'; }
+function refreshAll(){
+  $$('#camSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.cam === S.cam));
+  const ms = $('#modeSel'); ms.innerHTML = CAMS[S.cam].modes.map(m => `<option value="${m.id}">${m.label}</option>`).join(''); ms.value = S.mode[S.cam];
+  $('#customSensor').hidden = S.mode[S.cam] !== 'custom'; $('#cW').value = S.custom.w; $('#cH').value = S.custom.h;
+  const ls = $('#lensSel'); if (!ls.options.length) ls.innerHTML = Object.entries(LENSES).map(([k,l]) => `<option value="${k}">${l.name}</option>`).join(''); ls.value = S.lens;
+  $('#lensName').textContent = LENSES[S.lens].name;
+  $('#focals').innerHTML = LENSES[S.lens].f.map(f => `<button data-f="${f}" aria-pressed="${f === S.focal}">${f}</button>`).join('');
+  $$('#ratioSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.r === S.ratio || (S.ratio !== 'custom' && Math.abs(+b.dataset.r - +S.ratio) < .001)));
+  $('#customRatioRow').hidden = S.ratio !== 'custom'; $('#customRatio').value = S.customRatio;
+  $('#gThirds').checked = S.thirds; $('#gCross').checked = S.cross; $('#gSafe').checked = S.safe;
+  $('#maskR').value = S.mask; $('#maskV').textContent = S.mask + '%';
+  $('#tempR').value = S.kelvin; $('#tempV').textContent = S.kelvin + ' K';
+  $('#evR').value = S.ev; $('#evV').textContent = fmtEV(S.ev);
+  $('#hwZoom').checked = S.hwZoom; $('#burn').checked = S.burn;
+  $('#refR').value = S.refOpacity; $('#refV').textContent = S.refOpacity + '%';
+  $('#sceneIn').value = S.scene; $('#shotIn').value = S.shot; $('#nScene').textContent = S.scene; $('#nShot').textContent = S.shot;
+  if (document.activeElement !== $('#notesIn')) $('#notesIn').value = S.notes;
+  $('#guidesBtn').setAttribute('aria-pressed', S.guides);
+  $('#refBtn').setAttribute('aria-pressed', S.refOn && !!refImg.src);
+  $('#pcBtn').setAttribute('aria-pressed', ['webcam','test','photo'].includes(S.source) && !!src);
+  refreshOptics();
+}
+function refreshOptics(){
+  if (document.activeElement !== $('#focalIn')) $('#focalIn').value = S.focal;
+  $$('#focals button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.f === S.focal));
+  const hf = targetHfov(), m = modeObj();
+  const rTxt = S.ratio === 'custom' ? ratioVal().toFixed(2) + ':1' : (S.ratio === '1.7778' ? '16:9' : S.ratio + ':1');
+  $('#infoText').textContent = `${CAMS[S.cam].name}  •  ${m.short}  •  ${S.focal} mm  •  ${rTxt}  •  ${hf.toFixed(1)}° H`;
+  $('#focalStat').textContent = S.focal + ' mm';
+  $('#hfovStat').textContent = `${hf.toFixed(1)}° (${activeWidth().toFixed(1)} mm wide)`;
+  const c = calib();
+  $('#calibStat').textContent = src ? c.h.toFixed(1) + '° H' : '–';
+  $('#calCur').textContent = src ? `${c.h.toFixed(1)}° · ${c.how || 'custom'}` : '–';
+  if (document.activeElement !== $('#fovIn')) $('#fovIn').value = c.h.toFixed(1);
+  const warn = $('#warn');
+  if (src && !calibrating && Math.tan(c.h/2*D2R) * (src.kind === 'video' && zoomCap ? (c.z||1)/zoomCap.min : 1) < Math.tan(hf/2*D2R) * 0.995){
+    warn.textContent = src.kind === 'video' ? `${S.focal} mm is wider than this phone lens (${c.h.toFixed(0)}°). Switch to the ultrawide camera in Calibrate, then pick its preset.` : `${S.focal} mm is wider than this source image.`;
+    warn.hidden = false;
+  } else warn.hidden = true;
+  const custom = src && S.calib[src.key] && !/^S25 main|^Webcam/.test(S.calib[src.key].how || '');
+  $('#hint').textContent = src && src.kind === 'test' ? 'Test scene • synthetic 72.5° lens with angle scale.' : custom ? 'Calibrated • framing matches measured lens.' : 'Phone preview • framing approximate until calibrated.';
+  scheduleZoom();
+}
+
+/* ---------- panel / views ---------- */
+const app = $('#app');
+const isDrawer = () => matchMedia('(max-width:1099px), (max-height:600px)').matches;
+let view = 'setup';
+const TITLES = {setup:'ROOM 155', calib:'Calibrate', notes:'Shot notes', saved:'Saved frames', pc:'PC test'};
+function openPanel(v){
+  view = v || 'setup';
+  $$('.view').forEach(s => s.hidden = s.dataset.view !== view);
+  $('#panelTitle').textContent = TITLES[view]; $('#backBtn').hidden = view === 'setup';
+  app.classList.add('panel-open'); app.classList.remove('panel-closed');
+  const wasCal = calibrating; calibrating = view === 'calib' && !!src; if (wasCal !== calibrating){ ovKey = ''; scheduleZoom(); refreshOptics(); }
+  if (view === 'saved') loadGallery();
+  if (view === 'calib') fillDevices();
+}
+function closePanel(){ app.classList.remove('panel-open'); app.classList.add('panel-closed'); if (calibrating){ calibrating = false; ovKey = ''; scheduleZoom(); refreshOptics(); } }
+function togglePanel(v){ const open = app.classList.contains('panel-open'); if (open && (!v || v === view)) closePanel(); else openPanel(v); }
+$('#panelBtn').onclick = () => togglePanel('setup');
+$('#hidePanel').onclick = closePanel;
+$('#backBtn').onclick = () => openPanel('setup');
+$('#stage').addEventListener('pointerdown', e => { if (isDrawer() && app.classList.contains('panel-open') && view !== 'calib') closePanel(); });
+
+/* ---------- control bindings ---------- */
+const setFocal = f => { S.focal = Math.max(8, Math.min(800, Math.round(f))); persist(); refreshOptics(); };
+$('#camSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.cam = b.dataset.cam; persist(); refreshAll(); };
+$('#modeSel').onchange = e => { S.mode[S.cam] = e.target.value; persist(); refreshAll(); };
+$('#cW').oninput = e => { S.custom.w = +e.target.value || 36; persist(); refreshOptics(); };
+$('#cH').oninput = e => { S.custom.h = +e.target.value || 19; persist(); refreshOptics(); };
+$('#lensSel').onchange = e => { S.lens = e.target.value; const fs = LENSES[S.lens].f; if (!fs.includes(S.focal)) S.focal = fs.reduce((a,b) => Math.abs(b - S.focal) < Math.abs(a - S.focal) ? b : a); persist(); refreshAll(); };
+$('#focals').onclick = e => { const b = e.target.closest('button'); if (b) setFocal(+b.dataset.f); };
+$('#focalIn').onchange = e => setFocal(+e.target.value || 50);
+$('#fUp').onclick = () => setFocal(S.focal + 1);
+$('#fDn').onclick = () => setFocal(S.focal - 1);
+$('#ratioSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.ratio = b.dataset.r; persist(); refreshAll(); };
+$('#customRatio').oninput = e => { S.customRatio = e.target.value; persist(); refreshOptics(); };
+[['#gThirds','thirds'],['#gCross','cross'],['#gSafe','safe'],['#hwZoom','hwZoom'],['#burn','burn']].forEach(([id,k]) => $(id).onchange = e => { S[k] = e.target.checked; if (['thirds','cross','safe'].includes(k) && e.target.checked) S.guides = true; persist(); refreshAll(); });
+$('#maskR').oninput = e => { S.mask = +e.target.value; $('#maskV').textContent = S.mask + '%'; persist(); };
+$('#tempR').oninput = e => { S.kelvin = +e.target.value; $('#tempV').textContent = S.kelvin + ' K'; persist(); };
+$('#evR').oninput = e => { S.ev = +e.target.value; $('#evV').textContent = fmtEV(S.ev); persist(); };
+$('#resetGrade').onclick = () => { S.kelvin = 5600; S.ev = 0; persist(); refreshAll(); };
+$('#guidesBtn').onclick = () => { S.guides = !S.guides; persist(); refreshAll(); };
+$('#calibBtn').onclick = () => src ? openPanel('calib') : toast('Start the viewfinder first.');
+$('#refFile').onchange = e => { const f = e.target.files[0]; if (!f) return; refImg.src = URL.createObjectURL(f); S.refOn = true; ovKey = ''; persist(); refreshAll(); e.target.value = ''; };
+$('#refLoad').onclick = () => $('#refFile').click();
+$('#refClear').onclick = () => { refImg.removeAttribute('src'); S.refOn = false; ovKey = ''; persist(); refreshAll(); };
+$('#refR').oninput = e => { S.refOpacity = +e.target.value; $('#refV').textContent = S.refOpacity + '%'; persist(); };
+$('#refBtn').onclick = () => { if (!refImg.src) { $('#refFile').click(); return; } S.refOn = !S.refOn; ovKey = ''; persist(); refreshAll(); };
+$('#sceneIn').oninput = e => { S.scene = e.target.value; persist(); $('#nScene').textContent = S.scene; };
+$('#shotIn').oninput = e => { S.shot = e.target.value; persist(); $('#nShot').textContent = S.shot; };
+$('#notesIn').oninput = e => { S.notes = e.target.value; persist(); };
+$('#notesBtn').onclick = () => togglePanel('notes');
+$('#savedBtn').onclick = () => togglePanel('saved');
+$('#nEdit').onclick = () => { openPanel('setup'); setTimeout(() => $('#sceneIn').focus(), 50); };
+$('#capBtn').onclick = () => capture(false);
+$('#saveNotesBtn').onclick = () => capture(true);
+$('#nSave').onclick = () => capture(true);
+
+/* swipe on stage to change focal length (horizontal drag) */
+let drag = null;
+$('#stage').addEventListener('pointerdown', e => { if (calibrating || !$('#gate').hidden || !src) return; drag = {x:e.clientX, f:S.focal}; });
+addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x; if (Math.abs(dx) > 12){ setFocal(drag.f * Math.pow(2, dx / 300)); } });
+addEventListener('pointerup', () => drag = null); addEventListener('pointercancel', () => drag = null);
+
+/* ---------- calibration ---------- */
+$('#presets').innerHTML = PRESETS.map((p,i) => `<button class="btn" data-p="${i}">${p.name}<br><span class="note">${p.h.toFixed(1)}° H</span></button>`).join('');
+function setCal(h, how){ if (!src) return; S.calib[src.key] = {h: Math.max(5, Math.min(150, h)), how, z: zoomCap ? hwZoomNow : 1}; persist(); refreshOptics(); }
+$('#presets').onclick = e => { const b = e.target.closest('button'); if (!b) return; const p = PRESETS[+b.dataset.p]; setCal(p.h, p.name); toast(`Lens set to ${p.name}`); };
+$('#mApply').onclick = () => { const d = +$('#mD').value, w = +$('#mW').value; if (!(d > 0 && w > 0)) return toast('Enter distance and width in metres.'); const h = 2*Math.atan(w/(2*d))/D2R; setCal(h, `Measured ${w.toFixed(2)} m @ ${d.toFixed(2)} m`); toast(`Calibrated: ${h.toFixed(1)}° horizontal`); };
+$('#fMinus').onclick = () => setCal(calib().h - .5, 'Fine-tuned');
+$('#fPlus').onclick = () => setCal(calib().h + .5, 'Fine-tuned');
+$('#fovIn').onchange = e => setCal(+e.target.value || calib().h, 'Fine-tuned');
+function fillDevices(){
+  const sel = $('#devSel'); $('#devRow').hidden = !(src && src.kind === 'video' && devices.length > 1);
+  sel.innerHTML = devices.map((d,i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i+1)}</option>`).join('');
+  try { sel.value = track.getSettings().deviceId; } catch(e) {}
+}
+$('#devSel').onchange = async e => { try { await startCamera(S.source === 'webcam' ? 'webcam' : 'rear', e.target.value); calibrating = true; ovKey = ''; scheduleZoom(); fillDevices(); toast('Camera switched. Pick its preset or measure it.'); } catch(err){ toast('Could not open that camera.'); } };
+
+/* ---------- PC test ---------- */
+$('#pcBtn').onclick = () => togglePanel('pc');
+$('#gatePcBtn').onclick = () => openPanel('pc');
+$$('[data-src]').forEach(b => b.onclick = async () => {
+  const k = b.dataset.src;
+  if (k === 'photo') return $('#photoFile').click();
+  if (k === 'test'){ startTest(); hideGate(); afterPick(); toast('Test scene running'); return; }
+  try { await startCamera(k); hideGate(); afterPick(); toast(k === 'webcam' ? 'Webcam running. Calibrate for real framing.' : 'Rear camera running'); }
+  catch(err){ toast(camErr(err)); if (k === 'webcam'){ startTest(); hideGate(); } }
+});
+$('#photoFile').onchange = e => { const f = e.target.files[0]; if (f){ startPhoto(f); afterPick(); } e.target.value = ''; };
+function afterPick(){ if (isDrawer()) closePanel(); else openPanel('setup'); }
+
+/* ---------- start / gate ---------- */
+function hideGate(){ $('#gate').hidden = true; }
+function camErr(err){ const n = err && err.name; if (n === 'NotAllowedError') return 'Camera permission was denied. Allow camera access for this site in browser settings.'; if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera found.'; return err && err.message ? err.message : 'Camera could not start.'; }
+const isTouch = matchMedia('(pointer:coarse)').matches;
+async function goFull(){
+  try { if (!document.fullscreenElement && isTouch) await document.documentElement.requestFullscreen({navigationUI:'hide'}); } catch(e) {}
+  try { if (isTouch) await screen.orientation.lock('landscape'); } catch(e) {}
+}
+$('#startBtn').onclick = async () => {
+  goFull(); wake();
+  const kind = S.source === 'webcam' ? 'webcam' : 'rear';
+  try { await startCamera(kind); hideGate(); }
+  catch(err){ const m = $('#gateErr'); m.textContent = camErr(err) + ' You can still use PC test → Test scene.'; m.hidden = false; }
+};
+$('#fsBtn').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else { await document.documentElement.requestFullscreen({navigationUI:'hide'}); if (isTouch) screen.orientation.lock('landscape').catch(()=>{}); } } catch(e) { toast('Full screen is not available here.'); } };
+let wl = null; async function wake(){ try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wl = await navigator.wakeLock.request('screen'); } catch(e) {} }
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return; wake();
+  if (src && src.kind === 'video' && (!track || track.readyState === 'ended')){ try { await startCamera(S.source === 'webcam' ? 'webcam' : 'rear'); } catch(e) {} }
+});
+const checkOrient = () => { $('#rotateHint').hidden = !(isTouch && innerHeight > innerWidth); };
+addEventListener('resize', () => { ovKey = ''; checkOrient(); }); checkOrient();
+
+/* ---------- capture + storage ---------- */
+let dbp = null;
+function db(){ if (!dbp) dbp = new Promise((res, rej) => { const r = indexedDB.open('room155', 1); r.onupgradeneeded = () => r.result.createObjectStore('frames', {keyPath:'id', autoIncrement:true}); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); return dbp; }
+async function store(mode, fn){ const d = await db(); return new Promise((res, rej) => { const tx = d.transaction('frames', mode); const q = fn(tx.objectStore('frames')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); }); }
+const toBlob = (c, t='image/jpeg', q=.92) => new Promise(r => c.toBlob(r, t, q));
+
+async function capture(withNotes){
+  if (!src) return toast('Start the viewfinder first.');
+  if (calibrating) closePanel();
+  layout();
+  const {fr, vr} = G, sw = srcW(), sh = srcH();
+  const s = sw / vr.w; let W = fr.w*s, H = fr.h*s; const k = Math.min(1, 4096 / W); W = Math.round(W*k); H = Math.round(H*k);
+  const slate = S.burn ? Math.max(36, Math.round(H*.06)) : 0;
+  const c = document.createElement('canvas'); c.width = W; c.height = H + slate;
+  const x = c.getContext('2d', {willReadFrequently:true});
+  x.fillStyle = '#000'; x.fillRect(0,0,W,H+slate);
+  x.save();
+  const dx = (vr.x - fr.x)*s*k, dy = (vr.y - fr.y)*s*k, dw = sw*k, dh = sh*k;
+  if (src.mirror){ x.translate(W, 0); x.scale(-1, 1); x.drawImage(src.el, W - dx - dw, dy, dw, dh); } else x.drawImage(src.el, dx, dy, dw, dh);
+  x.restore();
+  if (S.kelvin !== 5600 || S.ev !== 0){
+    const gn = gains(), e = Math.pow(2, S.ev), lut = [0,1,2].map(ch => { const a = new Uint8ClampedArray(256); for (let i=0;i<256;i++) a[i] = 255*Math.pow(Math.min(1, Math.pow(i/255, 2.2)*gn[ch]*e), 1/2.2); return a; });
+    const id = x.getImageData(0,0,W,H), p = id.data; for (let i=0;i<p.length;i+=4){ p[i] = lut[0][p[i]]; p[i+1] = lut[1][p[i+1]]; p[i+2] = lut[2][p[i+2]]; } x.putImageData(id,0,0);
+  }
+  const m = modeObj(), hf = targetHfov(), now = new Date();
+  const meta = {cam:CAMS[S.cam].name, mode:m.short, focal:S.focal, ratio:ratioVal(), hfov:hf, scene:S.scene, shot:S.shot, kelvin:S.kelvin, ev:S.ev, lens:LENSES[S.lens].name, source:src.label, phoneH:calib().h};
+  if (slate){
+    x.fillStyle = '#0b1219'; x.fillRect(0, H, W, slate);
+    const fs = Math.round(slate*.42); x.font = `500 ${fs}px system-ui,sans-serif`; x.textBaseline = 'middle';
+    x.fillStyle = '#e8eef4'; x.fillText(`ROOM 155   SC ${S.scene}  SH ${S.shot}`, slate*.4, H + slate/2);
+    x.fillStyle = '#8fd6f5'; x.textAlign = 'right';
+    x.fillText(`${meta.cam} ${m.short} · ${S.focal} mm · ${ratioVal().toFixed(2)}:1 · ${now.toLocaleString([], {dateStyle:'short', timeStyle:'short'})}`, W - slate*.4, H + slate/2);
+  }
+  const fl = $('#flash'); fl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => fl.classList.remove('on')));
+  const blob = await toBlob(c);
+  const tc = document.createElement('canvas'); const tw = 360; tc.width = tw; tc.height = Math.round(tw * (H+slate) / W); tc.getContext('2d').drawImage(c, 0, 0, tc.width, tc.height);
+  const thumb = await toBlob(tc, 'image/jpeg', .8);
+  try {
+    await store('readwrite', st => st.add({created: now.getTime(), blob, thumb, meta, notes: S.notes}));
+    if (withNotes){ const prev = S.shot; S.shot = nextShot(S.shot); S.notes = ''; persist(); refreshAll(); toast(`Saved ${S.scene}${prev} · next shot ${S.scene}${S.shot}`); }
+    else toast(`Frame saved · ${S.scene}${S.shot} · ${S.focal} mm`);
+    if (view === 'saved' && app.classList.contains('panel-open')) loadGallery();
+  } catch(e) { toast('Could not save the frame on this device.'); }
+}
+function nextShot(s){ if (!/^[A-Z]+$/i.test(s)) { const n = parseInt(s, 10); return isNaN(n) ? s : String(n+1); }
+  const up = s === s.toUpperCase(); let a = s.toUpperCase().split(''), i = a.length - 1;
+  while (i >= 0){ if (a[i] === 'Z'){ a[i] = 'A'; i--; } else { a[i] = String.fromCharCode(a[i].charCodeAt(0)+1); break; } }
+  if (i < 0) a.unshift('A'); const r = a.join(''); return up ? r : r.toLowerCase(); }
+
+let urls = [];
+async function loadGallery(){
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+  const g = $('#gallery');
+  let all = []; try { all = await store('readonly', st => st.getAll()); } catch(e) {}
+  all = (all || []).sort((a,b) => b.created - a.created);
+  if (!all.length){ g.innerHTML = `<div class="empty" style="grid-column:1/-1">No frames yet. Tap Capture frame to save the current framing.</div>`; return; }
+  g.innerHTML = all.map(f => { const u = URL.createObjectURL(f.thumb || f.blob); urls.push(u); return `<button data-id="${f.id}"><img src="${u}" alt=""><span>${esc(f.meta.scene)}${esc(f.meta.shot)} · ${f.meta.focal} mm · ${new Date(f.created).toLocaleDateString()}</span></button>`; }).join('');
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let cur = null, curUrl = null, delArm = false;
+$('#gallery').onclick = async e => { const b = e.target.closest('button'); if (!b) return; cur = await store('readonly', st => st.get(+b.dataset.id)); if (!cur) return;
+  if (curUrl) URL.revokeObjectURL(curUrl); curUrl = URL.createObjectURL(cur.blob); $('#fdImg').src = curUrl;
+  const m = cur.meta; $('#fdTitle').textContent = `Scene ${m.scene} · Shot ${m.shot}`;
+  $('#fdMeta').textContent = `${m.cam} · ${m.mode} · ${m.focal} mm (${m.lens}) · ${(+m.ratio).toFixed(2)}:1 · ${m.hfov.toFixed(1)}° H · ${m.kelvin} K · ${fmtEV(m.ev)} · ${new Date(cur.created).toLocaleString()} · source: ${m.source}`;
+  $('#fdNotes').value = cur.notes || ''; delArm = false; $('#fdDel').textContent = 'Delete'; $('#frameDlg').showModal(); };
+$('#fdClose').onclick = () => $('#frameDlg').close();
+const fname = f => `Room155_SC${f.meta.scene}_SH${f.meta.shot}_${f.meta.focal}mm_${new Date(f.created).toISOString().slice(0,16).replace(/[:T]/g,'-')}.jpg`.replace(/[^\w.\-]/g,'_');
+$('#fdShare').onclick = async () => { if (!cur) return; const file = new File([cur.blob], fname(cur), {type:'image/jpeg'});
+  const text = `Room 155 · Scene ${cur.meta.scene} Shot ${cur.meta.shot} · ${cur.meta.cam} ${cur.meta.mode} · ${cur.meta.focal} mm${cur.notes ? '\n' + cur.notes : ''}`;
+  if (navigator.canShare && navigator.canShare({files:[file]})) { try { await navigator.share({files:[file], text}); } catch(e) {} } else download(); };
+function download(){ if (!cur) return; const a = document.createElement('a'); a.href = curUrl; a.download = fname(cur); document.body.appendChild(a); a.click(); a.remove(); }
+$('#fdDown').onclick = download;
+$('#fdSaveNotes').onclick = async () => { if (!cur) return; cur.notes = $('#fdNotes').value; await store('readwrite', st => st.put(cur)); toast('Notes updated'); };
+$('#fdDel').onclick = async () => { if (!cur) return; if (!delArm){ delArm = true; $('#fdDel').textContent = 'Tap again to delete'; return; } await store('readwrite', st => st.delete(cur.id)); $('#frameDlg').close(); loadGallery(); toast('Frame deleted'); };
+
+/* ---------- toast ---------- */
+let tt; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2600); }
+
+/* ---------- boot ---------- */
+if (!isDrawer()) { app.classList.remove('panel-closed'); app.classList.add('panel-open'); }
+refreshAll();
+requestAnimationFrame(render);
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+// Desktop without touch: show the PC test chooser straight away is unnecessary; the gate offers it.
+window.__room155 = {startTest, S, targetHfov};
+})();
+</script>
+</body>
+</html>
