@@ -138,10 +138,31 @@ textarea.field{width:100%;min-height:160px;resize:vertical}
 
 dialog{border:1px solid var(--line-2);background:var(--surface);color:var(--fg);border-radius:10px;padding:0;max-width:min(920px,96vw);width:100%;max-height:94vh}
 dialog::backdrop{background:#000c}
-.dlg{display:grid;grid-template-rows:auto 1fr auto;max-height:94vh}
-.dlg-body{overflow:auto;padding:12px 16px;display:grid;gap:10px}
-.dlg-body img{width:100%;border-radius:4px;background:#000}
+.dlg{display:grid;grid-template-rows:auto minmax(0,1fr) auto;max-height:94vh}
+.dlg-body{padding:12px 16px;display:grid;gap:10px;min-height:0;overflow:auto}
+.fd-img{display:flex;align-items:center;justify-content:center;background:#000;border-radius:4px;min-height:0;cursor:zoom-in;border:0;padding:0;position:relative}
+.fd-img img{display:block;max-width:100%;max-height:58vh;object-fit:contain}
+.fd-img .zoomhint{position:absolute;right:6px;top:6px;font-size:11px;background:#000a;color:#cfd8e2;padding:2px 6px;border-radius:4px}
+.fd-side{display:grid;gap:8px;align-content:start;min-height:0}
 .dlg-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+@media (max-height:600px){
+  dialog{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}
+  .dlg{height:100dvh;max-height:100dvh}
+  .dlg .panel-head{padding:6px 12px}
+  .dlg-body{grid-template-columns:minmax(0,1fr) minmax(200px,32%);padding:8px 12px;overflow:hidden}
+  .fd-img{height:100%}
+  .fd-img img{max-height:100%}
+  .fd-side{overflow-y:auto}
+  .fd-side textarea{min-height:70px!important}
+  .dlg-foot{padding:6px 12px}
+  .dlg-foot .btn{padding:7px 12px}
+}
+.viewer{position:fixed;inset:0;background:#000;z-index:60;touch-action:none;overflow:hidden}
+.viewer img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;user-select:none;-webkit-user-drag:none}
+.viewer .vclose{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));z-index:2;background:#000a}
+.viewer:not([hidden]) .vhint{animation:vh 3s forwards}
+@keyframes vh{0%,70%{opacity:1}100%{opacity:0}}
+.viewer .vhint{pointer-events:none;position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);font-size:12px;color:#cfd8e2;background:#000a;padding:4px 10px;border-radius:4px;white-space:nowrap}
 .meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;top:calc(56px + env(safe-area-inset-top,0px));transform:translate(-50%,-10px);background:#0f3d55;border:1px solid var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:6px;opacity:0;transition:.25s;pointer-events:none;z-index:50;font-size:13px;max-width:90vw}
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -388,9 +409,11 @@ dialog::backdrop{background:#000c}
   <div class="dlg">
     <div class="panel-head"><h2 id="fdTitle">Frame</h2><button class="iconbtn" id="fdClose" aria-label="Close">✕</button></div>
     <div class="dlg-body">
-      <img id="fdImg" alt="Captured frame">
-      <div class="meta" id="fdMeta"></div>
-      <textarea class="field" id="fdNotes" style="min-height:90px" aria-label="Notes"></textarea>
+      <button class="fd-img" id="fdOpen" aria-label="View full screen"><img id="fdImg" alt="Captured frame"><span class="zoomhint">Tap to enlarge</span></button>
+      <div class="fd-side">
+        <div class="meta" id="fdMeta"></div>
+        <textarea class="field" id="fdNotes" style="min-height:90px" aria-label="Notes" placeholder="Notes"></textarea>
+      </div>
     </div>
     <div class="dlg-foot">
       <button class="btn primary" id="fdShare">Share</button>
@@ -935,6 +958,31 @@ $('#gallery').onclick = async e => { const b = e.target.closest('button'); if (!
   $('#fdMeta').textContent = `${m.cam} · ${m.mode} · ${m.focal} mm (${m.lens}) · ${(+m.ratio).toFixed(2)}:1 · ${m.hfov.toFixed(1)}° H · ${m.kelvin} K · ${fmtEV(m.ev)}${m.mono ? ' · Mono' : ''} · ${new Date(cur.created).toLocaleString()} · source: ${m.source}`;
   $('#fdNotes').value = cur.notes || ''; delArm = false; $('#fdDel').textContent = 'Delete'; $('#frameDlg').showModal(); };
 $('#fdClose').onclick = () => $('#frameDlg').close();
+
+/* full-screen frame viewer with pinch zoom, drag and double-tap */
+const viewer = document.createElement('div'); viewer.className = 'viewer'; viewer.hidden = true;
+viewer.innerHTML = '<img alt="Captured frame, full screen"><button class="iconbtn vclose" aria-label="Close full-screen view">✕</button><div class="vhint">Pinch or double-tap to zoom · drag to move</div>';
+$('#frameDlg').appendChild(viewer);
+const vImg = viewer.querySelector('img');
+let vz = {s:1, x:0, y:0, fit:1}, pts = new Map(), pinch = null, lastTap = 0;
+const vApply = () => { vImg.style.transform = `translate(${vz.x}px,${vz.y}px) scale(${vz.s})`; };
+function vClamp(){ const W = innerWidth, H = innerHeight, w = vImg.naturalWidth*vz.s, h = vImg.naturalHeight*vz.s;
+  vz.x = w <= W ? (W-w)/2 : Math.min(0, Math.max(W-w, vz.x)); vz.y = h <= H ? (H-h)/2 : Math.min(0, Math.max(H-h, vz.y)); }
+function vFit(){ vz.fit = Math.min(innerWidth/vImg.naturalWidth, innerHeight/vImg.naturalHeight); vz.s = vz.fit; vClamp(); vApply(); }
+function vZoomAt(cx, cy, ns){ ns = Math.max(vz.fit, Math.min(vz.fit*8, ns)); vz.x = cx - (cx - vz.x)*ns/vz.s; vz.y = cy - (cy - vz.y)*ns/vz.s; vz.s = ns; vClamp(); vApply(); }
+$('#fdOpen').onclick = () => { if (!curUrl) return; vImg.onload = vFit; vImg.src = curUrl; viewer.hidden = false; if (vImg.complete && vImg.naturalWidth) vFit(); };
+viewer.querySelector('.vclose').onclick = e => { e.stopPropagation(); viewer.hidden = true; };
+addEventListener('resize', () => { if (!viewer.hidden) vFit(); });
+viewer.addEventListener('wheel', e => { e.preventDefault(); vZoomAt(e.clientX, e.clientY, vz.s * Math.exp(-e.deltaY/300)); }, {passive:false});
+viewer.addEventListener('pointerdown', e => { if (e.target.closest('.vclose')) return; viewer.setPointerCapture(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pts.size === 2){ const [a,b] = [...pts.values()]; pinch = {d:Math.hypot(a.x-b.x, a.y-b.y), s:vz.s}; }
+  else { const now = Date.now(); if (now - lastTap < 300){ vZoomAt(e.clientX, e.clientY, vz.s > vz.fit*1.05 ? vz.fit : vz.fit*3); lastTap = 0; } else lastTap = now; } });
+viewer.addEventListener('pointermove', e => { const p = pts.get(e.pointerId); if (!p) return;
+  if (pts.size === 2 && pinch){ pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); const [a,b] = [...pts.values()]; vZoomAt((a.x+b.x)/2, (a.y+b.y)/2, pinch.s * Math.hypot(a.x-b.x, a.y-b.y) / pinch.d); }
+  else if (pts.size === 1){ vz.x += e.clientX - p.x; vz.y += e.clientY - p.y; pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); vClamp(); vApply(); } });
+const vUp = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+viewer.addEventListener('pointerup', vUp); viewer.addEventListener('pointercancel', vUp);
+$('#frameDlg').addEventListener('close', () => { viewer.hidden = true; });
 const fname = f => `Room155_SC${f.meta.scene}_SH${f.meta.shot}_${f.meta.focal}mm_${new Date(f.created).toISOString().slice(0,16).replace(/[:T]/g,'-')}.jpg`.replace(/[^\w.\-]/g,'_');
 $('#fdShare').onclick = async () => { if (!cur) return; const file = new File([cur.blob], fname(cur), {type:'image/jpeg'});
   const text = `Room 155 · Scene ${cur.meta.scene} Shot ${cur.meta.shot} · ${cur.meta.cam} ${cur.meta.mode} · ${cur.meta.focal} mm${cur.notes ? '\n' + cur.notes : ''}`;
