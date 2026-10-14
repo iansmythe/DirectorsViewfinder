@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b1219">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Room 155 Viewfinder</title>
+<title>View 155</title>
+<meta name="application-name" content="View 155">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <style>
@@ -94,6 +95,8 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .row{display:flex;align-items:center;gap:10px;min-height:42px;justify-content:space-between}
 .row > label,.row > .k{color:#cfd8e2;font-size:13px}
 .row + .row{border-top:1px solid #ffffff08}
+.guides-off .grow > label{opacity:.45}
+.guides-note{font-size:12px;color:var(--warn);margin:0 0 4px}
 .field{background:var(--surface-2);border:1px solid var(--line-2);border-radius:6px;padding:8px 10px;min-width:0}
 select.field{flex:1;max-width:220px}
 input.field{width:100%}
@@ -102,7 +105,7 @@ input.field{width:100%}
 .seg.full button{padding:8px 4px}
 .switch{position:relative;width:44px;height:26px;flex:none}
 .switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
-.switch span{position:absolute;inset:0;border-radius:13px;background:var(--line-2);transition:background .15s}
+.switch span{position:absolute;inset:0;pointer-events:none;border-radius:13px;background:var(--line-2);transition:background .15s}
 .switch span::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}
 .switch input:checked + span{background:var(--accent)}
 .switch input:checked + span::after{transform:translateX(18px)}
@@ -152,6 +155,20 @@ dialog::backdrop{background:#000c}
   .app.panel-closed .panel{display:none}
 }
 /* compact landscape phone (Galaxy S25 ≈ 780×360) */
+/* panel hidden: maximise the viewfinder */
+.app.panel-closed .top{padding:4px 12px;gap:10px}
+.app.panel-closed .wordmark{font-size:15px}
+.app.panel-closed .brand .sub{display:none}
+.app.panel-closed .controls{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none}
+.app.panel-closed .controls::-webkit-scrollbar{display:none}
+.app.panel-closed .lensbar{border:0;flex-wrap:nowrap;padding:6px 8px 6px 12px;gap:8px}
+.app.panel-closed .lensbar .lbl,.app.panel-closed .lensname,.app.panel-closed .lensbar .vsep,.app.panel-closed .hint,.app.panel-closed .stepper > span{display:none}
+.app.panel-closed .focals{gap:4px}
+.app.panel-closed .focals button{min-width:48px;height:40px;font-size:16px}
+.app.panel-closed .stepper input{width:56px;padding:6px 8px;font-size:16px}
+.app.panel-closed .actions{padding:6px 12px 6px 4px;gap:6px}
+.app.panel-closed .act{min-width:48px;height:42px;padding:4px 10px;font-size:0;gap:0}
+.app.panel-closed .info .eyebrow{display:none}
 @media (max-height:520px){
   .top{padding:4px 12px;gap:10px}
   .wordmark{font-size:15px}
@@ -240,11 +257,12 @@ dialog::backdrop{background:#000c}
           </div>
         </div>
         <nav class="actions">
-          <button class="act" id="guidesBtn" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M3 8h18M3 16h18"/></svg>Guides</button>
-          <button class="act" id="refBtn" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 7V5h2M19 5h2v2M21 17v2h-2M5 19H3v-2M9 5h2M13 5h2M9 19h2M13 19h2M3 10v4M21 10v4"/></svg>Reference overlay</button>
-          <button class="act primary" id="capBtn"><svg viewBox="0 0 24 24"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Capture frame</button>
-          <button class="act" id="notesBtn"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Shot notes</button>
-          <button class="act" id="savedBtn"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h12a2 2 0 0 1 2 2v10"/></svg>Saved frames</button>
+          <button class="act" id="guidesBtn" aria-pressed="true" title="Show / hide all guides" aria-label="Guides"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M3 8h18M3 16h18"/></svg>Guides</button>
+          <button class="act" id="monoBtn" aria-pressed="false" title="Monochrome" aria-label="Monochrome"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>Mono</button>
+          <button class="act" id="refBtn" aria-pressed="false" title="Reference overlay" aria-label="Reference overlay"><svg viewBox="0 0 24 24"><path d="M3 7V5h2M19 5h2v2M21 17v2h-2M5 19H3v-2M9 5h2M13 5h2M9 19h2M13 19h2M3 10v4M21 10v4"/></svg>Reference overlay</button>
+          <button class="act primary" id="capBtn" title="Capture frame" aria-label="Capture frame"><svg viewBox="0 0 24 24"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Capture frame</button>
+          <button class="act" id="notesBtn" title="Shot notes" aria-label="Shot notes"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Shot notes</button>
+          <button class="act" id="savedBtn" title="Saved frames" aria-label="Saved frames"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="13" rx="1.5"/><path d="M7 4h12a2 2 0 0 1 2 2v10"/></svg>Saved frames</button>
           <div class="hint" id="hint">Phone preview • framing approximate until calibrated.</div>
         </nav>
       </div>
@@ -276,9 +294,12 @@ dialog::backdrop{background:#000c}
           <div class="row" id="customRatioRow" hidden><label for="customRatio">Custom ratio (e.g. 2.0, 4:3, 1.33)</label><input id="customRatio" class="field num" style="max-width:96px" value="2.00"></div>
 
           <h3>Guides</h3>
-          <div class="row"><label for="gThirds">Thirds</label><span class="switch"><input type="checkbox" id="gThirds"><span></span></span></div>
-          <div class="row"><label for="gCross">Centre cross</label><span class="switch"><input type="checkbox" id="gCross"><span></span></span></div>
-          <div class="row"><label for="gSafe">Safe areas <small class="note">(93% action / 90% title)</small></label><span class="switch"><input type="checkbox" id="gSafe"><span></span></span></div>
+          <div id="guideRows">
+          <p class="guides-note" id="guidesNote" hidden>All guides hidden by the Guides button. Turn any guide on here, or tap Guides, to show them.</p>
+          <div class="row grow"><label for="gThirds">Thirds</label><span class="switch"><input type="checkbox" id="gThirds"><span></span></span></div>
+          <div class="row grow"><label for="gCross">Centre cross</label><span class="switch"><input type="checkbox" id="gCross"><span></span></span></div>
+          <div class="row grow"><label for="gSafe">Safe areas <small class="note">(93% action / 90% title)</small></label><span class="switch"><input type="checkbox" id="gSafe"><span></span></span></div>
+          </div>
           <div class="k" style="font-size:13px;color:#cfd8e2;margin-top:6px">Frame mask opacity</div>
           <div class="slider"><input type="range" id="maskR" min="0" max="100" step="1" aria-label="Frame mask opacity"><span class="field val num" id="maskV">50%</span></div>
 
@@ -289,6 +310,7 @@ dialog::backdrop{background:#000c}
           <div class="k" style="font-size:13px;color:#cfd8e2;margin-top:6px">Exposure</div>
           <div class="slider"><input type="range" id="evR" min="-3" max="3" step="0.1" aria-label="Exposure"><span class="field val num" id="evV">+0.0 EV</span></div>
           <div class="scale"><span>−3</span><span>+3</span></div>
+          <div class="row"><label for="monoT">Monochrome</label><span class="switch"><input type="checkbox" id="monoT"><span></span></span></div>
           <div class="row"><button class="btn" id="resetGrade">↺ Reset grading</button><span class="note">Preview adjustments only</span></div>
 
           <h3>Phone lens</h3>
@@ -421,7 +443,7 @@ const TEST_HFOV = diag43(85);
 /* ---------- state ---------- */
 const DEF = {cam:'R5', mode:{R5:'ff',C80:'ff6k'}, custom:{w:36,h:19}, focal:50, lens:'rf24105',
   ratio:'2.39', customRatio:'2.00', guides:true, thirds:true, cross:true, safe:true, mask:50,
-  kelvin:5600, ev:0, scene:'03', shot:'B', notes:'', burn:true, hwZoom:true, refOpacity:50, refOn:false,
+  kelvin:5600, ev:0, mono:false, scene:'03', shot:'B', notes:'', burn:true, hwZoom:true, refOpacity:50, refOn:false,
   source:'rear', calib:{}};
 let S = structuredClone(DEF);
 try { const saved = JSON.parse(localStorage.getItem('room155') || 'null'); if (saved) S = Object.assign(S, saved); } catch(e) {}
@@ -536,7 +558,7 @@ precision highp float;
 precision mediump float;
 #endif
 
-  uniform sampler2D t;uniform vec2 res;uniform vec4 vr;uniform vec4 fr;uniform float mask;uniform vec3 gain;uniform float expo;uniform float mirror;uniform float has;
+  uniform sampler2D t;uniform vec2 res;uniform vec4 vr;uniform vec4 fr;uniform float mask;uniform vec3 gain;uniform float expo;uniform float mirror;uniform float has;uniform float mono;
   void main(){
     vec2 px=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);
     vec2 uv=(px-vr.xy)/vr.zw; vec3 c;
@@ -544,13 +566,14 @@ precision mediump float;
     else{ if(mirror>.5)uv.x=1.-uv.x; c=texture2D(t,uv).rgb; c=pow(c,vec3(2.2))*gain*expo; c=pow(clamp(c,0.,1.),vec3(1./2.2)); }
     bool inF=px.x>=fr.x&&px.x<=fr.x+fr.z&&px.y>=fr.y&&px.y<=fr.y+fr.w;
     if(!inF)c*=(1.-mask);
+    if(mono>.5){ float l=dot(c,vec3(.2126,.7152,.0722)); c=vec3(l); }
     gl_FragColor=vec4(c,1.);
   }`;
   const sh = (type, s) => { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); return o; };
   prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
   const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
   const a = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-  ['res','vr','fr','mask','gain','expo','mirror','has'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  ['res','vr','fr','mask','gain','expo','mirror','has','mono'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
   tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
   [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(p => gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE));
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -570,9 +593,9 @@ function layout(){
   const r = cv.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = Math.round(r.width*dpr), H = Math.round(r.height*dpr);
   if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
-  const compact = r.height < 330;
-  const m = Math.max(10, Math.min(r.width, r.height) * (compact ? .035 : .06));
-  const top = compact ? 20 : 38;
+  const compact = r.height < 330 || app.classList.contains('panel-closed');
+  const m = Math.max(8, Math.min(r.width, r.height) * (compact ? .025 : .06));
+  const top = compact ? 22 : 38;
   const availW = r.width - 2*m, availH = r.height - top - m;
   const ratio = ratioVal(); let fw = availW, fh = fw / ratio; if (fh > availH){ fh = availH; fw = fh*ratio; }
   const fr = {x:(r.width - fw)/2, y: top + (availH - fh)/2, w:fw, h:fh};
@@ -603,6 +626,7 @@ function render(){
     gl.uniform1f(U.expo, Math.pow(2, S.ev));
     gl.uniform1f(U.mirror, src && src.mirror ? 1 : 0);
     gl.uniform1f(U.has, has);
+    gl.uniform1f(U.mono, S.mono ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
   drawOverlay();
@@ -659,6 +683,8 @@ function refreshAll(){
   $('#sceneIn').value = S.scene; $('#shotIn').value = S.shot; $('#nScene').textContent = S.scene; $('#nShot').textContent = S.shot;
   if (document.activeElement !== $('#notesIn')) $('#notesIn').value = S.notes;
   $('#guidesBtn').setAttribute('aria-pressed', S.guides);
+  $('#guideRows').classList.toggle('guides-off', !S.guides); $('#guidesNote').hidden = S.guides;
+  $('#monoBtn').setAttribute('aria-pressed', S.mono); $('#monoT').checked = S.mono;
   $('#refBtn').setAttribute('aria-pressed', S.refOn && !!refImg.src);
   $('#pcBtn').setAttribute('aria-pressed', ['webcam','test','photo'].includes(S.source) && !!src);
   refreshOptics();
@@ -668,7 +694,7 @@ function refreshOptics(){
   $$('#focals button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.f === S.focal));
   const hf = targetHfov(), m = modeObj();
   const rTxt = S.ratio === 'custom' ? ratioVal().toFixed(2) + ':1' : (S.ratio === '1.7778' ? '16:9' : S.ratio + ':1');
-  $('#infoText').textContent = `${CAMS[S.cam].name}  •  ${m.short}  •  ${S.focal} mm  •  ${rTxt}  •  ${hf.toFixed(1)}° H`;
+  $('#infoText').textContent = `${CAMS[S.cam].name}  •  ${m.short}  •  ${S.focal} mm  •  ${rTxt}  •  ${hf.toFixed(1)}° H${S.mono ? '  •  Mono' : ''}`;
   $('#focalStat').textContent = S.focal + ' mm';
   $('#hfovStat').textContent = `${hf.toFixed(1)}° (${activeWidth().toFixed(1)} mm wide)`;
   const c = calib();
@@ -694,7 +720,7 @@ function openPanel(v){
   view = v || 'setup';
   $$('.view').forEach(s => s.hidden = s.dataset.view !== view);
   $('#panelTitle').textContent = TITLES[view]; $('#backBtn').hidden = view === 'setup';
-  app.classList.add('panel-open'); app.classList.remove('panel-closed');
+  app.classList.add('panel-open'); if (!isDrawer()) app.classList.remove('panel-closed');
   const wasCal = calibrating; calibrating = view === 'calib' && !!src; if (wasCal !== calibrating){ ovKey = ''; scheduleZoom(); refreshOptics(); }
   if (view === 'saved') loadGallery();
   if (view === 'calib') fillDevices();
@@ -723,7 +749,10 @@ $('#customRatio').oninput = e => { S.customRatio = e.target.value; persist(); re
 $('#maskR').oninput = e => { S.mask = +e.target.value; $('#maskV').textContent = S.mask + '%'; persist(); };
 $('#tempR').oninput = e => { S.kelvin = +e.target.value; $('#tempV').textContent = S.kelvin + ' K'; persist(); };
 $('#evR').oninput = e => { S.ev = +e.target.value; $('#evV').textContent = fmtEV(S.ev); persist(); };
-$('#resetGrade').onclick = () => { S.kelvin = 5600; S.ev = 0; persist(); refreshAll(); };
+$('#resetGrade').onclick = () => { S.kelvin = 5600; S.ev = 0; S.mono = false; persist(); refreshAll(); };
+const setMono = v => { S.mono = v; persist(); refreshAll(); };
+$('#monoBtn').onclick = () => setMono(!S.mono);
+$('#monoT').onchange = e => setMono(e.target.checked);
 $('#guidesBtn').onclick = () => { S.guides = !S.guides; persist(); refreshAll(); };
 $('#calibBtn').onclick = () => src ? openPanel('calib') : toast('Start the viewfinder first.');
 $('#refFile').onchange = e => { const f = e.target.files[0]; if (!f) return; refImg.src = URL.createObjectURL(f); S.refOn = true; ovKey = ''; persist(); refreshAll(); e.target.value = ''; };
@@ -796,7 +825,7 @@ document.addEventListener('visibilitychange', async () => {
   if (src && src.kind === 'video' && (!track || track.readyState === 'ended')){ try { await startCamera(S.source === 'webcam' ? 'webcam' : 'rear'); } catch(e) {} }
 });
 const checkOrient = () => { $('#rotateHint').hidden = !(isTouch && innerHeight > innerWidth); };
-addEventListener('resize', () => { ovKey = ''; checkOrient(); }); checkOrient();
+addEventListener('resize', () => { ovKey = ''; checkOrient(); if (!isDrawer() && app.classList.contains('panel-open')) app.classList.remove('panel-closed'); else if (isDrawer()) app.classList.add('panel-closed'); }); checkOrient();
 
 /* ---------- capture + storage ---------- */
 let dbp = null;
@@ -818,12 +847,13 @@ async function capture(withNotes){
   const dx = (vr.x - fr.x)*s*k, dy = (vr.y - fr.y)*s*k, dw = sw*k, dh = sh*k;
   if (src.mirror){ x.translate(W, 0); x.scale(-1, 1); x.drawImage(src.el, W - dx - dw, dy, dw, dh); } else x.drawImage(src.el, dx, dy, dw, dh);
   x.restore();
-  if (S.kelvin !== 5600 || S.ev !== 0){
+  if (S.kelvin !== 5600 || S.ev !== 0 || S.mono){
     const gn = gains(), e = Math.pow(2, S.ev), lut = [0,1,2].map(ch => { const a = new Uint8ClampedArray(256); for (let i=0;i<256;i++) a[i] = 255*Math.pow(Math.min(1, Math.pow(i/255, 2.2)*gn[ch]*e), 1/2.2); return a; });
-    const id = x.getImageData(0,0,W,H), p = id.data; for (let i=0;i<p.length;i+=4){ p[i] = lut[0][p[i]]; p[i+1] = lut[1][p[i+1]]; p[i+2] = lut[2][p[i+2]]; } x.putImageData(id,0,0);
+    const id = x.getImageData(0,0,W,H), p = id.data; for (let i=0;i<p.length;i+=4){ p[i] = lut[0][p[i]]; p[i+1] = lut[1][p[i+1]]; p[i+2] = lut[2][p[i+2]];
+      if (S.mono){ const l = .2126*p[i] + .7152*p[i+1] + .0722*p[i+2]; p[i] = p[i+1] = p[i+2] = l; } } x.putImageData(id,0,0);
   }
   const m = modeObj(), hf = targetHfov(), now = new Date();
-  const meta = {cam:CAMS[S.cam].name, mode:m.short, focal:S.focal, ratio:ratioVal(), hfov:hf, scene:S.scene, shot:S.shot, kelvin:S.kelvin, ev:S.ev, lens:LENSES[S.lens].name, source:src.label, phoneH:calib().h};
+  const meta = {cam:CAMS[S.cam].name, mode:m.short, focal:S.focal, ratio:ratioVal(), hfov:hf, scene:S.scene, shot:S.shot, kelvin:S.kelvin, ev:S.ev, mono:S.mono, lens:LENSES[S.lens].name, source:src.label, phoneH:calib().h};
   if (slate){
     x.fillStyle = '#0b1219'; x.fillRect(0, H, W, slate);
     const fs = Math.round(slate*.42); x.font = `500 ${fs}px system-ui,sans-serif`; x.textBaseline = 'middle';
@@ -861,7 +891,7 @@ let cur = null, curUrl = null, delArm = false;
 $('#gallery').onclick = async e => { const b = e.target.closest('button'); if (!b) return; cur = await store('readonly', st => st.get(+b.dataset.id)); if (!cur) return;
   if (curUrl) URL.revokeObjectURL(curUrl); curUrl = URL.createObjectURL(cur.blob); $('#fdImg').src = curUrl;
   const m = cur.meta; $('#fdTitle').textContent = `Scene ${m.scene} · Shot ${m.shot}`;
-  $('#fdMeta').textContent = `${m.cam} · ${m.mode} · ${m.focal} mm (${m.lens}) · ${(+m.ratio).toFixed(2)}:1 · ${m.hfov.toFixed(1)}° H · ${m.kelvin} K · ${fmtEV(m.ev)} · ${new Date(cur.created).toLocaleString()} · source: ${m.source}`;
+  $('#fdMeta').textContent = `${m.cam} · ${m.mode} · ${m.focal} mm (${m.lens}) · ${(+m.ratio).toFixed(2)}:1 · ${m.hfov.toFixed(1)}° H · ${m.kelvin} K · ${fmtEV(m.ev)}${m.mono ? ' · Mono' : ''} · ${new Date(cur.created).toLocaleString()} · source: ${m.source}`;
   $('#fdNotes').value = cur.notes || ''; delArm = false; $('#fdDel').textContent = 'Delete'; $('#frameDlg').showModal(); };
 $('#fdClose').onclick = () => $('#frameDlg').close();
 const fname = f => `Room155_SC${f.meta.scene}_SH${f.meta.shot}_${f.meta.focal}mm_${new Date(f.created).toISOString().slice(0,16).replace(/[:T]/g,'-')}.jpg`.replace(/[^\w.\-]/g,'_');

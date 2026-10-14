@@ -1,6 +1,6 @@
 {
-  "name": "Room 155 Director's Viewfinder",
-  "short_name": "Room 155",
+  "name": "View 155",
+  "short_name": "View 155",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
