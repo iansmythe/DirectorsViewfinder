@@ -38,6 +38,7 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .seg button[aria-pressed="true"]{background:var(--accent-fill);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
 .tools{display:flex;gap:8px;align-items:center}
 .chip{border:1px solid var(--line-2);background:var(--surface);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.chip.quit{color:#ffb4a8;border-color:#7a2e2e}
 .chip[aria-pressed="true"]{color:var(--accent-ink);border-color:var(--accent);background:var(--accent-fill)}
 .iconbtn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--fg)}
 .iconbtn svg,.act svg,.chip svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
@@ -170,6 +171,7 @@ dialog::backdrop{background:#000c}
 .app.panel-closed .act{min-width:48px;height:42px;padding:4px 10px;font-size:0;gap:0}
 .app.panel-closed .info .eyebrow{display:none}
 @media (max-height:520px){
+  #quitBtn,#pcBtn{font-size:12px}
   .top{padding:4px 12px;gap:10px}
   .wordmark{font-size:15px}
   .seg button{padding:5px 10px;font-size:12px}
@@ -215,6 +217,7 @@ dialog::backdrop{background:#000c}
       <button class="chip" id="pcBtn" title="Test on a Windows computer with a webcam, test scene or photo" aria-pressed="false">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>PC test</button>
       <button class="iconbtn" id="fsBtn" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="chip quit" id="quitBtn" title="Stop the camera and close" aria-label="Quit"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>Quit</button>
       <button class="iconbtn" id="panelBtn" title="Setup panel" aria-label="Setup panel"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/></svg></button>
     </div>
   </header>
@@ -236,6 +239,7 @@ dialog::backdrop{background:#000c}
             <button class="btn primary" id="startBtn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Start viewfinder</button>
             <button class="chip" id="gatePcBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>Testing on a PC? Use webcam or test scene</button>
             <p class="err" id="gateErr" hidden></p>
+            <p id="gateStopped" hidden>Viewfinder stopped and camera released. To leave, swipe up from the bottom of the screen or use Recent apps.</p>
           </div>
         </div>
       </div>
@@ -476,8 +480,9 @@ async function startCamera(kind, deviceId){
          facing, isRearGuess: kind === 'rear' || facing === 'environment' || /back|rear|environment/i.test(track.label || '')};
   if (!S.calib[src.key]) S.calib[src.key] = src.isRearGuess ? {h:PRESETS[0].h, how:PRESETS[0].name, z:1} : {h:PRESETS[3].h, how:PRESETS[3].name, z:1};
   try { devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch(e) { devices = []; }
-  S.source = kind; persist();
-  track.addEventListener('ended', () => toast('Camera stopped. Tap Start to resume.'));
+  S.source = kind; S.lastDev = st.deviceId || null; persist();
+  camOn = true; lastT = -1; lastTChange = performance.now();
+  const myTrack = track; track.addEventListener('ended', () => { if (myTrack === track) restartCamera('ended'); });
   scheduleZoom();
   refreshAll();
 }
@@ -510,7 +515,7 @@ function drawTestScene(t){
 }
 function startTest(){ stopStream(); drawTestScene(0); src = {el:testCanvas, kind:'test', mirror:false, key:'test', label:'Test scene'}; S.calib.test = {h:TEST_HFOV, how:'Test scene (fixed)', z:1}; S.source = 'test'; persist(); refreshAll(); }
 function startPhoto(file){
-  const img = new Image(); img.onload = () => { stopStream(); src = {el:img, kind:'photo', mirror:false, key:'photo', label:'Photo', dirty:true};
+  const img = new Image(); img.onload = () => { camWanted = false; stopStream(); src = {el:img, kind:'photo', mirror:false, key:'photo', label:'Photo', dirty:true};
     if (!S.calib.photo) S.calib.photo = {h:PRESETS[0].h, how:PRESETS[0].name, z:1}; S.source = 'photo'; persist(); hideGate(); refreshAll(); };
   img.src = URL.createObjectURL(file);
 }
@@ -797,8 +802,8 @@ $('#gatePcBtn').onclick = () => openPanel('pc');
 $$('[data-src]').forEach(b => b.onclick = async () => {
   const k = b.dataset.src;
   if (k === 'photo') return $('#photoFile').click();
-  if (k === 'test'){ startTest(); hideGate(); afterPick(); toast('Test scene running'); return; }
-  try { await startCamera(k); hideGate(); afterPick(); toast(k === 'webcam' ? 'Webcam running. Calibrate for real framing.' : 'Rear camera running'); }
+  if (k === 'test'){ camWanted = false; startTest(); hideGate(); afterPick(); toast('Test scene running'); return; }
+  try { camWanted = true; await startCamera(k); hideGate(); afterPick(); toast(k === 'webcam' ? 'Webcam running. Calibrate for real framing.' : 'Rear camera running'); }
   catch(err){ toast(camErr(err)); if (k === 'webcam'){ startTest(); hideGate(); } }
 });
 $('#photoFile').onchange = e => { const f = e.target.files[0]; if (f){ startPhoto(f); afterPick(); } e.target.value = ''; };
@@ -815,15 +820,51 @@ async function goFull(){
 $('#startBtn').onclick = async () => {
   goFull(); wake();
   const kind = S.source === 'webcam' ? 'webcam' : 'rear';
-  try { await startCamera(kind); hideGate(); }
-  catch(err){ const m = $('#gateErr'); m.textContent = camErr(err) + ' You can still use PC test → Test scene.'; m.hidden = false; }
+  camWanted = true; $('#gateStopped').hidden = true;
+  try { await startCamera(kind, S.lastDev || undefined).catch(() => startCamera(kind)); hideGate(); }
+  catch(err){ camWanted = false; const m = $('#gateErr'); m.textContent = camErr(err) + ' You can still use PC test → Test scene.'; m.hidden = false; }
 };
 $('#fsBtn').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else { await document.documentElement.requestFullscreen({navigationUI:'hide'}); if (isTouch) screen.orientation.lock('landscape').catch(()=>{}); } } catch(e) { toast('Full screen is not available here.'); } };
 let wl = null; async function wake(){ try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wl = await navigator.wakeLock.request('screen'); } catch(e) {} }
-document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible') return; wake();
-  if (src && src.kind === 'video' && (!track || track.readyState === 'ended')){ try { await startCamera(S.source === 'webcam' ? 'webcam' : 'rear'); } catch(e) {} }
+/* ---------- camera lifecycle: release when hidden, reopen on return, unfreeze watchdog ---------- */
+let camOn = false, camWanted = false, restarting = false, lastT = -1, lastTChange = 0;
+async function restartCamera(why){
+  if (restarting || !camWanted || document.visibilityState !== 'visible') return;
+  restarting = true;
+  const kind = S.source === 'webcam' ? 'webcam' : 'rear';
+  try { await startCamera(kind, S.lastDev || undefined); }
+  catch(e){ try { await startCamera(kind); } catch(e2){ toast(camErr(e2)); } }
+  finally { restarting = false; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden'){
+    if (src && src.kind === 'video'){ camWanted = true; stopStream(); camOn = false; }
+    return;
+  }
+  wake();
+  if (camWanted && !camOn) restartCamera('return');
 });
+addEventListener('pagehide', () => { if (src && src.kind === 'video'){ stopStream(); camOn = false; } });
+addEventListener('pageshow', e => { if (e.persisted && camWanted && !camOn) restartCamera('bfcache'); });
+setInterval(() => {
+  if (!camWanted || !camOn || restarting || document.visibilityState !== 'visible' || !src || src.kind !== 'video') return;
+  const now = performance.now();
+  if (video.paused) video.play().catch(()=>{});
+  if (video.currentTime !== lastT){ lastT = video.currentTime; lastTChange = now; return; }
+  if (now - lastTChange > 2000 || (track && track.readyState === 'ended')){ lastTChange = now; restartCamera('frozen'); }
+}, 700);
+
+/* ---------- quit ---------- */
+async function quitApp(){
+  camWanted = false; stopStream(); camOn = false; src = null; calibrating = false;
+  try { if (wl) { await wl.release(); wl = null; } } catch(e) {}
+  try { screen.orientation.unlock(); } catch(e) {}
+  try { if (document.fullscreenElement) await document.exitFullscreen(); } catch(e) {}
+  closePanel(); refreshAll();
+  $('#gateErr').hidden = true; $('#gateStopped').hidden = false; $('#gate').hidden = false;
+  try { window.close(); } catch(e) {}
+}
+$('#quitBtn').onclick = quitApp;
 const checkOrient = () => { $('#rotateHint').hidden = !(isTouch && innerHeight > innerWidth); };
 addEventListener('resize', () => { ovKey = ''; checkOrient(); if (!isDrawer() && app.classList.contains('panel-open')) app.classList.remove('panel-closed'); else if (isDrawer()) app.classList.add('panel-closed'); }); checkOrient();
 
